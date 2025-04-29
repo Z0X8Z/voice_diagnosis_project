@@ -12,11 +12,22 @@ from .user import (
     TokenData
 )
 
+from .voice_metrics import (
+    VoiceMetricsBase,
+    VoiceMetricsCreate,
+    VoiceMetricsUpdate,
+    VoiceMetrics
+)
+
 __all__ = [
     "UserBase",
     "UserCreate",
     "UserUpdate",
     "User",
     "Token",
-    "TokenData"
+    "TokenData",
+    "VoiceMetricsBase",
+    "VoiceMetricsCreate",
+    "VoiceMetricsUpdate",
+    "VoiceMetrics"
 ]
