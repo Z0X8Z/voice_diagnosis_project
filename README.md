@@ -63,4 +63,4 @@ npm install
 - 后端：FastAPI, SQLAlchemy
 - 数据库：MySQL
 - AI模型：PyTorch
-- 部署：Docker, Nginx 
+- 部署：Docker, Nginx

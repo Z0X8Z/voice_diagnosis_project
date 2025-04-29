@@ -27,4 +27,4 @@ class Diagnosis(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # 关联用户
-    user = relationship("User", back_populates="diagnoses") 
+    user = relationship("User", back_populates="diagnoses")

@@ -50,4 +50,4 @@ def update_user(db: Session, user_id: int, user: user_schema.UserUpdate) -> Opti
     
     db.commit()
     db.refresh(db_user)
-    return db_user 
+    return db_user

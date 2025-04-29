@@ -1,4 +1,5 @@
-from pydantic import BaseSettings, Field
+from pydantic_settings import BaseSettings
+from pydantic import Field
 from typing import Optional
 
 class Settings(BaseSettings):
@@ -8,22 +9,22 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     
     # JWT设置
-    SECRET_KEY: str = Field(..., env="SECRET_KEY")
+    SECRET_KEY: str = Field(default="your-super-secret-key-please-change-it")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
     
     # 数据库设置
-    MYSQL_USER: str = Field(..., env="MYSQL_USER")
-    MYSQL_PASSWORD: str = Field(..., env="MYSQL_PASSWORD")
-    MYSQL_HOST: str = Field("localhost", env="MYSQL_HOST")
-    MYSQL_PORT: int = Field(3306, env="MYSQL_PORT")
-    MYSQL_DB: str = Field(..., env="MYSQL_DB")
+    MYSQL_USER: str = Field(default="root")
+    MYSQL_PASSWORD: str = Field(default="12345678")
+    MYSQL_HOST: str = Field(default="localhost")
+    MYSQL_PORT: int = Field(default=3306)
+    MYSQL_DB: str = Field(default="project")
     
     # AI模型设置
-    MODEL_PATH: str = Field("models/voice_model.pt", env="MODEL_PATH")
+    MODEL_PATH: str = Field(default="models/voice_model.pt")
     
     # LLM设置
-    LLM_API_KEY: Optional[str] = Field(None, env="LLM_API_KEY")
+    LLM_API_KEY: Optional[str] = None
     
     @property
     def DATABASE_URL(self) -> str:
@@ -35,5 +36,6 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        case_sensitive = True
 
-settings = Settings() 
+settings = Settings()
