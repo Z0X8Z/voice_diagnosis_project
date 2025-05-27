@@ -1,41 +1,46 @@
-from pydantic_settings import BaseSettings
-from pydantic import Field
-from typing import Optional
+from typing import Any, Dict, List, Optional, Union
+from pydantic import AnyHttpUrl, BaseSettings, validator
 
 class Settings(BaseSettings):
-    # 项目基本设置
-    PROJECT_NAME: str = "声肺康"
-    VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
-    
-    # JWT设置
-    SECRET_KEY: str = Field(default="your-super-secret-key-please-change-it")
+    PROJECT_NAME: str = "声肺康智能分析系统"
+    VERSION: str = "1.0.0"
+    SECRET_KEY: str = "your-secret-key-here"  # 在生产环境中应该使用环境变量
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 30  # 30天
     
-    # 数据库设置
-    MYSQL_USER: str = Field(default="root")
-    MYSQL_PASSWORD: str = Field(default="12345678")
-    MYSQL_HOST: str = Field(default="localhost")
-    MYSQL_PORT: int = Field(default=3306)
-    MYSQL_DB: str = Field(default="project")
-    
-    # AI模型设置
-    MODEL_PATH: str = Field(default="models/voice_model.pt")
-    
-    # LLM设置
-    LLM_API_KEY: Optional[str] = None
-    
-    @property
-    def DATABASE_URL(self) -> str:
-        return (
-            f"mysql+pymysql://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}@"
-            f"{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_DB}"
-        )
-    
+    # CORS配置
+    BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = []
+
+    # OpenAI配置
+    OPENAI_API_KEY: str = "sk-mkmgtzssdtykqpaigcotikbjpqbylqrpokblhswjyjnpbfbz"
+    OPENAI_MODEL: str = "Qwen/Qwen3-8B"
+    OPENAI_API_BASE: str = "https://api.siliconflow.cn/v1"
+
+    @validator("BACKEND_CORS_ORIGINS", pre=True)
+    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> Union[List[str], str]:
+        if isinstance(v, str) and not v.startswith("["):
+            return [i.strip() for i in v.split(",")]
+        elif isinstance(v, (list, str)):
+            return v
+        raise ValueError(v)
+
+    # 数据库配置
+    MYSQL_HOST: str = "localhost"
+    MYSQL_PORT: str = "3306"
+    MYSQL_USER: str = "root"
+    MYSQL_PASSWORD: str = "12345678"
+    MYSQL_DATABASE: str = "project"
+    SQLALCHEMY_DATABASE_URI: Optional[str] = None
+
+    @validator("SQLALCHEMY_DATABASE_URI", pre=True)
+    def assemble_db_connection(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
+        if isinstance(v, str):
+            return v
+        return f"mysql+pymysql://{values.get('MYSQL_USER')}:{values.get('MYSQL_PASSWORD')}@{values.get('MYSQL_HOST')}:{values.get('MYSQL_PORT')}/{values.get('MYSQL_DATABASE')}"
+
     class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
         case_sensitive = True
+        env_file = ".env"
 
 settings = Settings()

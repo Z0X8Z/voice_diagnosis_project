@@ -1,64 +1,38 @@
-# 语音诊断系统
+# 声肺康智能分析系统
 
-这是一个基于语音分析的诊断系统，集成了机器学习模型和大语言模型，用于提供专业的诊断建议。
+声肺康智能分析系统是一个基于声音分析的肺部健康评估系统，通过分析用户的声音特征来评估肺部健康状况。
 
-## 项目结构
+## 功能特点
 
-```
-project/
-├── backend/                # 后端代码
-│   ├── app/
-│   │   ├── api/           # API路由
-│   │   ├── core/          # 核心配置
-│   │   ├── db/            # 数据库模型
-│   │   ├── models/        # AI模型
-│   │   └── services/      # 业务逻辑
-│   └── main.py            # 后端入口
-├── frontend/              # 前端代码
-│   ├── src/
-│   │   ├── views/         # 页面组件
-│   │   ├── stores/        # 状态管理
-│   │   ├── router/        # 路由配置
-│   │   └── components/    # 通用组件
-│   ├── public/
-│   └── package.json
-├── ml_models/            # 机器学习模型
-│   ├── trained/          # 训练好的模型
-│   └── training/         # 训练脚本
-├── requirements.txt      # Python依赖
-└── README.md            # 项目文档
-```
+- 声音特征分析
+- 肺部健康评估
+- 历史数据追踪
+- 趋势分析
+- 用户管理
+- 数据可视化
 
-## 功能特性
+## 技术栈
 
-- 用户认证系统
-  - 用户注册
-  - 用户登录
-  - 权限控制
-- 语音数据采集和处理
-  - 语音上传
-  - 实时录音
-  - 音频预处理
-- AI模型诊断
-  - 声音特征提取
-  - 机器学习分析
-  - 诊断结果生成
-- 大语言模型分析
-  - 诊断报告生成
-  - 专业建议提供
-- 历史记录管理
-  - 诊断历史查询
-  - 数据统计分析
-- 数据可视化面板
-  - 语音波形显示
-  - 诊断指标展示
-  - 趋势分析图表
+### 后端
+- Python 3.8+
+- FastAPI
+- SQLAlchemy
+- MySQL
+- Alembic
+- JWT认证
 
-## 安装说明
+### 前端
+- React
+- TypeScript
+- Ant Design
+- ECharts
+
+## 安装步骤
 
 1. 克隆项目
 ```bash
-git clone https://github.com/Z0X8Z/voice_diagnosis_project
+git clone <项目地址>
+cd <项目目录>
 ```
 
 2. 安装后端依赖
@@ -74,37 +48,136 @@ npm install
 ```
 
 4. 配置环境变量
-创建 `.env` 文件并设置必要的环境变量：
+```bash
+cd backend
+python scripts/setup_env.py
 ```
-# 数据库配置
-MYSQL_USER=your_username
-MYSQL_PASSWORD=your_password
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_DB=voice_diagnosis
+按照提示输入配置信息，或直接使用默认值。
 
-# JWT配置
-SECRET_KEY=your_secret_key
+5. 初始化数据库
+```bash
+cd backend
+python scripts/init_mysql_db.py
 ```
 
-5. 启动服务
-- 后端：`uvicorn main:app --reload`
-- 前端：`npm run dev`
+## 运行项目
 
-## 技术栈
+1. 启动后端服务
+```bash
+cd backend
+uvicorn main:app --reload
+```
 
-- 前端：Vue.js, Element Plus, Echarts
-- 后端：FastAPI, SQLAlchemy
-- 数据库：MySQL
-- AI模型：PyTorch
-- 部署：Docker, Nginx
+2. 启动前端服务
+```bash
+cd frontend
+npm start
+```
 
-## 开发团队
+3. 访问应用
+- 后端API文档：http://localhost:8000/docs
+- 前端应用：http://localhost:3000
 
-- 后端开发：[开发者名字]
-- 前端开发：[开发者名字]
-- AI模型：[开发者名字]
+## 项目结构
 
-## 开源协议
+```
+.
+├── backend/                # 后端代码
+│   ├── app/               # 应用代码
+│   │   ├── api/          # API路由
+│   │   ├── core/         # 核心配置
+│   │   ├── db/           # 数据库
+│   │   ├── models/       # 数据模型
+│   │   ├── schemas/      # 数据模式
+│   │   └── services/     # 业务服务
+│   ├── scripts/          # 脚本文件
+│   └── tests/            # 测试文件
+├── frontend/              # 前端代码
+│   ├── src/              # 源代码
+│   │   ├── components/   # 组件
+│   │   ├── pages/        # 页面
+│   │   ├── services/     # 服务
+│   │   └── utils/        # 工具
+│   └── public/           # 静态资源
+└── docs/                 # 文档
+```
 
-MIT License
+## 开发指南
+
+### 后端开发
+
+1. 创建新的API端点
+- 在 `app/api/v1/endpoints/` 下创建新的路由文件
+- 在 `app/api/v1/api.py` 中注册路由
+
+2. 添加新的数据模型
+- 在 `app/models/` 下创建新的模型文件
+- 运行数据库迁移：
+   ```bash
+cd backend
+alembic revision --autogenerate -m "描述"
+alembic upgrade head
+```
+
+### 前端开发
+
+1. 创建新的组件
+- 在 `src/components/` 下创建新的组件文件
+- 在 `src/pages/` 下创建新的页面文件
+
+2. 添加新的API服务
+- 在 `src/services/` 下创建新的服务文件
+
+## 测试
+
+### 后端测试
+   ```bash
+cd backend
+pytest
+```
+
+### 前端测试
+```bash
+cd frontend
+npm test
+```
+
+## 部署
+
+### 后端部署
+1. 构建Docker镜像
+```bash
+cd backend
+docker build -t voice-analysis-backend .
+   ```
+
+2. 运行容器
+   ```bash
+docker run -d -p 8000:8000 voice-analysis-backend
+   ```
+
+### 前端部署
+1. 构建生产版本
+   ```bash
+cd frontend
+npm run build
+```
+
+2. 部署到Web服务器
+将 `build` 目录下的文件部署到Web服务器。
+
+## 贡献指南
+
+1. Fork 项目
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 创建 Pull Request
+
+## 许可证
+
+本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
+
+## 联系方式
+
+如有问题或建议，请提交 Issue 或联系项目维护者。

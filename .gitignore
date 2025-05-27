@@ -41,9 +41,9 @@ ehthumbs.db
 Thumbs.db
 
 # Project specific
-ml_models/*.pt
+# ml_models/*.pt
 
-ml_models/
+# ml_models/
 docs/
 tests/
 migrations/

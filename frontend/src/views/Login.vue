@@ -24,8 +24,19 @@
             登录
           </el-button>
         </el-form-item>
+        
+        <!-- 错误信息展示 -->
+        <el-alert
+          v-if="errorMessage"
+          :title="errorMessage"
+          type="error"
+          show-icon
+          :closable="true"
+          @close="clearError"
+        />
+        
         <div class="register-link">
-          还没有账号？
+          没有账号？
           <router-link to="/register">立即注册</router-link>
         </div>
       </el-form>
@@ -34,7 +45,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { ElMessage } from 'element-plus'
@@ -45,6 +56,29 @@ const userStore = useUserStore()
 const loginFormRef = ref(null)
 const loading = ref(false)
 
+// 计算属性：获取用户状态中的错误信息
+const errorMessage = computed(() => {
+  if (!userStore.lastError) return ''
+  
+  // 如果服务器返回了详细错误信息
+  if (userStore.lastError.data && userStore.lastError.data.detail) {
+    return userStore.lastError.data.detail
+  }
+  
+  // 如果有HTTP状态错误
+  if (userStore.lastError.status) {
+    return `错误 ${userStore.lastError.status}: ${userStore.lastError.statusText || '请求失败'}`
+  }
+  
+  // 其他错误
+  return userStore.lastError.message || '登录失败，请稍后重试'
+})
+
+// 清除错误信息
+const clearError = () => {
+  userStore.clearError()
+}
+
 const loginForm = reactive({
   username: '',
   password: ''
@@ -52,34 +86,42 @@ const loginForm = reactive({
 
 const rules = {
   username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 3, max: 20, message: '长度在 3 到 20 个字符', trigger: 'blur' }
+    { required: true, message: '请输入用户名', trigger: 'blur' }
   ],
   password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, max: 20, message: '长度在 6 到 20 个字符', trigger: 'blur' }
+    { required: true, message: '请输入密码', trigger: 'blur' }
   ]
 }
 
 const handleLogin = async () => {
-  if (!loginFormRef.value) return
-  
-  await loginFormRef.value.validate(async (valid) => {
-    if (valid) {
-      loading.value = true
-      try {
-        const success = await userStore.login(loginForm.username, loginForm.password)
-        if (success) {
-          ElMessage.success('登录成功')
-          router.push('/home')
-        } else {
-          ElMessage.error('登录失败，请检查用户名和密码')
+  if (!loginFormRef.value) {
+    return;
+  }
+  // 先清除可能存在的错误信息
+  clearError()
+  try {
+    await loginFormRef.value.validate(async (valid) => {
+      if (valid) {
+        loading.value = true
+        try {
+          const success = await userStore.login(
+            loginForm.username,
+            loginForm.password
+          )
+          if (success) {
+            ElMessage.success('登录成功')
+            router.push('/home')
+          }
+        } catch (error) {
+          // 登录异常不再输出console
+        } finally {
+          loading.value = false
         }
-      } finally {
-        loading.value = false
       }
-    }
-  })
+    });
+  } catch (validationError) {
+    // 验证异常不再输出console
+  }
 }
 </script>
 

@@ -40,6 +40,17 @@
             注册
           </el-button>
         </el-form-item>
+        
+        <!-- 错误信息展示 -->
+        <el-alert
+          v-if="errorMessage"
+          :title="errorMessage"
+          type="error"
+          show-icon
+          :closable="true"
+          @close="clearError"
+        />
+        
         <div class="login-link">
           已有账号？
           <router-link to="/login">立即登录</router-link>
@@ -50,7 +61,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { ElMessage } from 'element-plus'
@@ -60,6 +71,29 @@ const router = useRouter()
 const userStore = useUserStore()
 const registerFormRef = ref(null)
 const loading = ref(false)
+
+// 计算属性：获取用户状态中的错误信息
+const errorMessage = computed(() => {
+  if (!userStore.lastError) return ''
+  
+  // 如果服务器返回了详细错误信息
+  if (userStore.lastError.data && userStore.lastError.data.detail) {
+    return userStore.lastError.data.detail
+  }
+  
+  // 如果有HTTP状态错误
+  if (userStore.lastError.status) {
+    return `错误 ${userStore.lastError.status}: ${userStore.lastError.statusText || '请求失败'}`
+  }
+  
+  // 其他错误
+  return userStore.lastError.message || '注册失败，请稍后重试'
+})
+
+// 清除错误信息
+const clearError = () => {
+  userStore.clearError()
+}
 
 const registerForm = reactive({
   username: '',
@@ -100,6 +134,9 @@ const rules = {
 const handleRegister = async () => {
   if (!registerFormRef.value) return
   
+  // 先清除可能存在的错误信息
+  clearError()
+  
   await registerFormRef.value.validate(async (valid) => {
     if (valid) {
       loading.value = true
@@ -112,9 +149,8 @@ const handleRegister = async () => {
         if (success) {
           ElMessage.success('注册成功')
           router.push('/login')
-        } else {
-          ElMessage.error('注册失败，请稍后重试')
-        }
+        } 
+        // 错误信息现在从 errorMessage 计算属性获取并显示
       } finally {
         loading.value = false
       }

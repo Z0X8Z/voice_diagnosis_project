@@ -1,14 +1,15 @@
 """
-核心功能包
-包含配置和基础设施代码
+Core functionality for the application
 """
 
 from .config import settings
-from .security import verify_password, get_password_hash, create_access_token
+from .password_utils import verify_password, get_password_hash
+from .security import create_access_token, get_current_user
 
 __all__ = [
     "settings",
     "verify_password",
     "get_password_hash",
-    "create_access_token"
+    "create_access_token",
+    "get_current_user"
 ]

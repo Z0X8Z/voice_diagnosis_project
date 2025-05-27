@@ -1,39 +1,127 @@
 import { defineStore } from 'pinia'
 import axios from 'axios'
 
+// 创建axios实例
+const api = axios.create({
+  baseURL: '/api/v1',  // 使用相对路径，让Vite代理处理
+  timeout: 10000,      // 请求超时时间
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+
+// 请求拦截器
+api.interceptors.request.use(
+  config => {
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+      console.log('发送请求，使用token:', token) // 调试信息
+    } else {
+      console.log('发送请求，无token') // 调试信息
+    }
+    return config
+  },
+  error => {
+    console.error('请求错误:', error)
+    return Promise.reject(error)
+  }
+)
+
+// 响应拦截器
+api.interceptors.response.use(
+  response => response,
+  error => {
+    if (!error.response) {
+      // 网络错误
+      console.error('网络错误:', error.message)
+      return Promise.reject({
+        message: '网络连接失败，请检查网络设置'
+      })
+    }
+    
+    // 处理401错误
+    if (error.response.status === 401) {
+      console.error('认证失败:', error.response.data)
+      // 清除无效的token
+      localStorage.removeItem('token')
+    }
+    
+    return Promise.reject(error)
+  }
+)
+
 export const useUserStore = defineStore('user', {
   state: () => ({
     token: localStorage.getItem('token') || '',
-    userInfo: null
+    userInfo: null,
+    lastError: null,
+    latestKpi: null,
+    latestLlmSuggestion: null
   }),
+  
+  getters: {
+    isLoggedIn: (state) => !!state.token
+  },
   
   actions: {
     async login(username, password) {
       try {
-        const response = await axios.post('http://localhost:8000/api/v1/auth/login', {
-          username,
-          password
-        })
+        console.log('尝试登录:', username) // 调试信息
+        
+        // 使用表单数据格式，与FastAPI的OAuth2PasswordRequestForm兼容
+        const formData = new URLSearchParams();
+        formData.append('username', username);
+        formData.append('password', password);
+        
+        const response = await api.post('/auth/login', 
+          formData,
+          {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded'
+            }
+          }
+        )
+        
+        console.log('登录响应:', response.data) // 调试信息
+        
         const { access_token } = response.data
+        if (!access_token) {
+          throw new Error('服务器未返回token')
+        }
+        
         this.token = access_token
         localStorage.setItem('token', access_token)
         return true
       } catch (error) {
-        console.error('登录失败:', error)
+        console.error('登录失败:', error.response?.data || error.message) // 调试信息
+        this.lastError = {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          message: error.message || '登录失败，请稍后重试'
+        }
         return false
       }
     },
 
     async register(username, email, password) {
       try {
-        const response = await axios.post('http://localhost:8000/api/v1/auth/register', {
-          username,
-          email,
-          password
-        })
+        const response = await api.post('/auth/register', 
+          {
+            username,
+            email,
+            password
+          }
+        )
         return true
       } catch (error) {
-        console.error('注册失败:', error)
+        this.lastError = {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          message: error.message || '注册失败，请稍后重试'
+        }
         return false
       }
     },
@@ -42,6 +130,23 @@ export const useUserStore = defineStore('user', {
       this.token = ''
       this.userInfo = null
       localStorage.removeItem('token')
+    },
+    
+    clearError() {
+      this.lastError = null
+    },
+
+    setLatestKpi(kpi) {
+      this.latestKpi = kpi
+    },
+
+    setLatestLlmSuggestion(suggestion) {
+      this.latestLlmSuggestion = suggestion
+    },
+
+    clearLatestDetection() {
+      this.latestKpi = null
+      this.latestLlmSuggestion = null
     }
   }
 }) 

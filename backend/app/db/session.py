@@ -4,9 +4,11 @@ from app.core.config import settings
 
 # 创建数据库引擎
 engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,  # 自动检测断开的连接
-    echo=False,  # 设置为True可以看到SQL语句
+    settings.SQLALCHEMY_DATABASE_URI,
+    pool_pre_ping=True,
+    pool_recycle=3600,  # 连接在池中回收前的秒数
+    pool_size=5,  # 连接池大小
+    max_overflow=10  # 连接池溢出时允许创建的最大连接数
 )
 
 # 创建会话工厂

@@ -1,0 +1,20 @@
+{
+  "voice_analysis_llm": {
+    "description": "语音分析大语言模型",
+    "version": "1.0.0",
+    "remote_url": "https://example.com/models/voice_analysis_llm_v1.0.0.bin",
+    "size_mb": 2048,
+    "last_updated": "2023-05-15",
+    "framework": "pytorch",
+    "required_memory_gb": 8
+  },
+  "custom_asr_model": {
+    "description": "定制化语音识别模型",
+    "version": "0.9.5",
+    "remote_url": "https://example.com/models/custom_asr_v0.9.5.bin",
+    "size_mb": 1536,
+    "last_updated": "2023-04-22",
+    "framework": "tensorflow",
+    "required_memory_gb": 6
+  }
+} 
