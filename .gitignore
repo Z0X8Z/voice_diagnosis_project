@@ -1,37 +1,37 @@
-# Python
+# Python 缓存和虚拟环境
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
 env/
+venv/
+ENV/
+.venv/
+backend/.env
+backend/env/
+backend/venv/
+backend/.venv/
+
+# Python 构建
 build/
-develop-eggs/
 dist/
-downloads/
-eggs/
 .eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
 *.egg-info/
 .installed.cfg
 *.egg
 
-# Virtual Environment
-venv/
-ENV/
-.env
+# 数据库/迁移/测试
+migrations/
+tests/
 
-# IDE
+# IDE/编辑器
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# OS
+# 操作系统垃圾文件
 .DS_Store
 .DS_Store?
 ._*
@@ -40,10 +40,30 @@ ENV/
 ehthumbs.db
 Thumbs.db
 
-# Project specific
-# ml_models/*.pt
+# Conda 环境
+.conda/
 
+# 前端依赖和构建产物
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# 后端依赖
+backend/.env
+
+# 项目特定
+uploads/
+# 如果你希望上传 ml_models 目录，注释掉下一行
 # ml_models/
-docs/
-tests/
-migrations/
+# 忽略大模型权重文件
+ml_models/**/*.pt
+ml_models/**/*.pth
+
+# 日志和临时文件
+*.log
+*.tmp
+
+# 其它
+*.bak
+*.old
+*.orig
