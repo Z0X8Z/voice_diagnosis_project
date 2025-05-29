@@ -3,11 +3,14 @@ from sqlalchemy.orm import Session
 from app.repositories.user_repository import UserRepository
 from app.schemas.user import UserCreate, UserUpdate
 from app.core.security import get_password_hash
+from app.db.models import User
 from typing import Dict, Any, List
+import logging
 
 class UserService:
     def __init__(self, db: Session):
         self.repository = UserRepository(db)
+        self.logger = logging.getLogger(__name__)
     
     async def create_user(self, user_data: UserCreate) -> Dict[str, Any]:
         """创建新用户"""
@@ -52,29 +55,37 @@ class UserService:
             "is_active": user.is_active
         }
     
-    async def update_user(self, user_id: int, user_data: UserUpdate) -> Dict[str, Any]:
+    async def update_user(self, user_id: int, user_data: UserUpdate) -> User:
         """更新用户信息"""
+        self.logger.error(f"[update_user] 进入方法 user_id={user_id}, user_data={user_data}")
         user = self.repository.get_by_id(user_id)
         if not user:
+            self.logger.warning(f"[update_user] 用户不存在: user_id={user_id}")
             raise HTTPException(
                 status_code=404,
                 detail="用户不存在"
             )
-        
-        # 准备更新数据
         update_data = user_data.dict(exclude_unset=True)
+        self.logger.error(f"[update_user] update_data={update_data}")
+        if "email" in update_data:
+            exist = self.repository.get_by_email(update_data["email"])
+            self.logger.info(f"[update_user] email check: exist={exist}")
+            if exist and exist.id != user_id:
+                self.logger.warning(f"[update_user] 邮箱已被注册: {update_data['email']}")
+                raise HTTPException(status_code=400, detail="该邮箱已被注册")
+        if "username" in update_data:
+            exist = self.repository.get_by_username(update_data["username"])
+            self.logger.info(f"[update_user] username check: exist={exist}")
+            if exist and exist.id != user_id:
+                self.logger.warning(f"[update_user] 用户名已被使用: {update_data['username']}")
+                raise HTTPException(status_code=400, detail="该用户名已被使用")
         if "password" in update_data:
+            self.logger.error("[update_user] 密码加密")
             update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
-        
-        # 更新用户
+        self.logger.error("[update_user] 调用repository.update")
         user = self.repository.update(user, update_data)
-        
-        return {
-            "id": user.id,
-            "email": user.email,
-            "username": user.username,
-            "is_active": user.is_active
-        }
+        self.logger.error(f"[update_user] 更新后用户: id={user.id}, email={user.email}, username={user.username}")
+        return user
     
     async def delete_user(self, user_id: int) -> Dict[str, Any]:
         """删除用户"""

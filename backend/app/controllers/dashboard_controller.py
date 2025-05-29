@@ -89,7 +89,7 @@ class DashboardController:
                 "created_at": session.created_at,
                 "prediction": prediction,
                 "confidence": confidence,
-                "llm_suggestion": session.diagnosis_suggestion if hasattr(session, 'diagnosis_suggestion') else None
+                "diagnosis_suggestion": session.diagnosis_suggestion if hasattr(session, 'diagnosis_suggestion') else None
             })
         
         return result
@@ -391,13 +391,20 @@ class DashboardController:
         
         if not latest_metrics:
             return None
-            
+        
         return {
+            "session_id": latest_metrics.session_id,
             "metrics": {
+                "session_id": latest_metrics.session_id,
                 "rms": latest_metrics.rms,
                 "zcr": latest_metrics.zcr,
                 "model_prediction": latest_metrics.model_prediction,
-                "model_confidence": latest_metrics.model_confidence
+                "model_confidence": latest_metrics.model_confidence,
+                "mel_spectrogram": latest_metrics.mel_spectrogram,
+                # MFCC 1-13
+                **{f"mfcc_{i}": getattr(latest_metrics, f"mfcc_{i}", None) for i in range(1, 14)},
+                # Chroma 1-12
+                **{f"chroma_{i}": getattr(latest_metrics, f"chroma_{i}", None) for i in range(1, 13)}
             },
             "created_at": latest_metrics.created_at
         }

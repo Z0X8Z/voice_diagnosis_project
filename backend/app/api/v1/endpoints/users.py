@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List
 from app.core.security import get_current_user
@@ -6,8 +6,40 @@ from app.db.session import get_db
 from app.db.models import User
 from app.controllers.user_controller import UserController
 from app.schemas.user import UserCreate, UserUpdate, User as UserSchema
+from fastapi.responses import JSONResponse
+from fastapi.exception_handlers import RequestValidationError
+import logging
 
 router = APIRouter()
+
+@router.get("/me", response_model=UserSchema)
+async def get_current_user_info(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取当前登录用户信息"""
+    return UserSchema.from_orm(current_user)
+
+@router.put("/me", response_model=UserSchema)
+async def update_current_user(
+    user_in: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    request: Request = None
+):
+    """更新当前登录用户信息"""
+    try:
+        controller = UserController(db)
+        user = controller.update_user(current_user.id, user_in)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return UserSchema.from_orm(user)
+    except RequestValidationError as e:
+        logging.error(f"422 Unprocessable Entity: {e.errors()}")
+        return JSONResponse(status_code=422, content={"detail": e.errors()})
+    except Exception as e:
+        logging.error(f"Unexpected error: {str(e)}")
+        raise 
 
 @router.get("/", response_model=List[UserSchema])
 async def get_users(

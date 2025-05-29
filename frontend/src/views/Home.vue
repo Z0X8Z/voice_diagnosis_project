@@ -1,36 +1,5 @@
 <template>
   <div class="home-container">
-    <!-- 顶部导航栏 -->
-    <header class="nav-header">
-      <div class="logo-title">
-        <img :src="logo" class="logo-img" />
-        <span class="system-title">声肺康智能分析</span>
-      </div>
-      <div class="nav-right">
-      <el-menu
-        :default-active="activeIndex"
-        class="nav-menu"
-        mode="horizontal"
-        router
-      >
-        <el-menu-item index="/home">主页</el-menu-item>
-        <el-menu-item index="/dashboard">仪表盘</el-menu-item>
-        <el-menu-item index="/settings">设置</el-menu-item>
-      </el-menu>
-        <el-dropdown @command="handleCommand">
-          <el-button type="primary" plain>
-            <el-icon><User /></el-icon>
-            用户菜单
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="profile">个人信息</el-dropdown-item>
-              <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-      </div>
-    </header>
     <!-- 主要内容区域 -->
     <div class="main-content">
       <el-card class="upload-card">
@@ -95,8 +64,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Microphone, User } from '@element-plus/icons-vue'
-import logo from '../assets/logo.png'
+import { Microphone } from '@element-plus/icons-vue'
 import { useUserStore } from '../stores/user'
 import axios from 'axios'
 
@@ -115,8 +83,6 @@ const waveformCanvas = ref(null)
 const volumeFeedback = ref('音量正常')
 const volumeLevelClass = ref('normal')
 const userStore = useUserStore()
-
-const activeIndex = computed(() => route.path)
 
 const drawWaveform = () => {
   if (!analyser || !waveformCanvas.value) return
@@ -207,10 +173,17 @@ const toggleRecording = async () => {
 }
 
 const uploadAudio = async () => {
+  // 上传新语音前，清除仪表盘本地存储
+  localStorage.removeItem('voice_analysis_conversation');
   const audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
   const formData = new FormData()
   const timestamp = new Date().getTime()
   formData.append('file', audioBlob, `voice_${timestamp}.webm`)
+  // 存储首轮分析请求内容到 localStorage
+  localStorage.setItem('initialLLMMessage', JSON.stringify({
+    role: 'user',
+    content: '请分析我的语音健康' // 你可以根据实际业务动态生成
+  }))
   
   // 检查token是否存在
   if (!userStore.token) {
@@ -220,95 +193,65 @@ const uploadAudio = async () => {
     return
   }
   
-  try {
-    uploadStatus.value = { type: 'info', message: '正在上传录音...' }
-    console.log('使用的token:', userStore.token) // 调试信息
-    const response = await fetch('/api/v1/diagnosis/upload', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${userStore.token}`
-      },
-      body: formData
-    })
-    if (!response.ok) {
-      const errorData = await response.json()
-      console.error('上传错误详情:', errorData)
-      throw new Error(errorData.detail || '上传失败')
-    }
-    const result = await response.json()
-    uploadStatus.value = { type: 'success', message: '上传成功' }
-    analysisResult.value = result.result
-    userStore.setLatestKpi(result.result)
-    // 跳转到dashboard页面
-    setTimeout(() => {
-      window.location.href = '/dashboard'
-    }, 800)
-  } catch (error) {
-    console.error('上传错误:', error)
-    uploadStatus.value = { type: 'error', message: `上传失败: ${error.message}` }
-    analysisResult.value = null
-  }
-}
-
-const uploadFile = async (file) => {
-  try {
-    const token = userStore.token
-    if (!token) {
-      console.error('Token is missing')
-      ElMessage.error('请先登录')
-      return
-    }
-
-    // 验证 token 格式
-    if (!token.startsWith('Bearer ')) {
-      console.error('Invalid token format:', token)
-      ElMessage.error('认证信息无效')
-      return
-    }
-
-    console.log('Uploading file with token:', token)
-    const formData = new FormData()
-    formData.append('file', file)
-
-    const response = await axios.post(
-      `${import.meta.env.VITE_API_BASE_URL}/api/v1/diagnosis/upload`,
-      formData,
-      {
+  let triedRefresh = false
+  while (true) {
+    try {
+      uploadStatus.value = { type: 'info', message: '正在上传录音...' }
+      console.log('使用的token:', userStore.token) // 调试信息
+      const response = await fetch('/api/v1/diagnosis/upload', {
+        method: 'POST',
         headers: {
-          'Authorization': token
+          'Authorization': `Bearer ${userStore.token}`
+        },
+        body: formData
+      })
+      if (response.status === 401 && !triedRefresh) {
+        // token过期，尝试刷新
+        try {
+          await userStore.refreshToken()
+          triedRefresh = true
+          continue // 重试上传
+        } catch (e) {
+          uploadStatus.value = { type: 'error', message: '登录已过期，请重新登录' }
+          router.push('/login')
+          return
         }
       }
-    )
-
-    if (response.data) {
-      console.log('Upload response:', response.data)
-      ElMessage.success('文件上传成功')
-      // 处理上传成功后的逻辑
-    }
-  } catch (error) {
-    console.error('Upload error:', error)
-    if (error.response) {
-      console.error('Error response:', error.response.data)
-      if (error.response.status === 401) {
-        ElMessage.error('认证失败，请重新登录')
-        userStore.logout()
-        router.push('/login')
-      } else {
-        ElMessage.error(error.response.data.detail || '上传失败')
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error('上传错误详情:', errorData)
+        throw new Error(errorData.detail || '上传失败')
       }
-    } else {
-      ElMessage.error('上传失败，请检查网络连接')
+      const result = await response.json()
+      uploadStatus.value = { type: 'success', message: '上传成功' }
+      analysisResult.value = result.result
+      userStore.setLatestKpi(result.result)
+      
+      // 保存首轮对话内容到localStorage，以便在仪表盘页面恢复
+      if (result.llm_prompt) {
+        try {
+          localStorage.setItem('initialLLMMessage', JSON.stringify({
+            role: 'user',
+            content: result.llm_prompt
+          }))
+          console.log('已保存首轮对话内容到localStorage')
+        } catch (e) {
+          console.error('保存首轮对话内容失败:', e)
+        }
+      }
+      
+      // 跳转到dashboard页面
+      setTimeout(() => {
+        router.push({ path: '/dashboard', query: { fromUpload: 1 } })
+      }, 800)
+      break
+    } catch (error) {
+      if (error.message === '登录已过期，请重新登录') return
+      console.error('上传错误:', error)
+      uploadStatus.value = { type: 'error', message: `上传失败: ${error.message}` }
+      analysisResult.value = null
+      break
     }
-  }
-}
-
-const handleCommand = (command) => {
-  if (command === 'logout') {
-    userStore.logout()
-    ElMessage.success('已退出登录')
-    router.push('/login')
-  } else if (command === 'profile') {
-    router.push('/settings')
   }
 }
 
@@ -329,67 +272,34 @@ onBeforeUnmount(() => {
   background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%);
 }
 
-.nav-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #fff;
-  box-shadow: 0 2px 8px #e0e0e0;
-  padding: 0 40px;
-  height: 64px;
-}
-
-.nav-right {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.logo-title {
-  display: flex;
-  align-items: center;
-}
-
-.logo-img {
-  height: 40px;
-  margin-right: 16px;
-}
-
-.system-title {
-  font-size: 22px;
-  font-weight: bold;
-  color: #2196f3;
-  letter-spacing: 2px;
-}
-
-.nav-menu {
-  background: transparent;
-  border-bottom: none;
-}
-
 .main-content {
-  padding: 80px 20px 20px;
-  max-width: 500px;
-  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 60px 20px 20px;
+  min-height: 80vh;
 }
 
 .upload-card {
-  margin: 60px auto 0;
-  max-width: 500px;
-  border-radius: 18px;
-  box-shadow: 0 4px 24px #b3e5fc55;
+  width: 480px;
+  border-radius: 22px;
+  box-shadow: 0 4px 32px #b3e5fc55;
   background: #fff;
+  padding: 32px 24px 24px 24px;
+  margin-top: 32px;
 }
 
 .card-header {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+  font-size: 20px;
+  font-weight: bold;
+  color: #2196f3;
 }
 
 .upload-main-icon {
-  font-size: 48px;
+  font-size: 32px;
   color: #2196f3;
 }
 
@@ -397,83 +307,122 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin: 40px 0 20px 0;
+  margin: 32px 0 24px 0;
 }
 
 .record-tips {
+  background: #f5f7fa;
+  border-radius: 12px;
+  padding: 12px 18px;
+  margin-bottom: 18px;
   font-size: 15px;
-  color: #333;
-  margin-bottom: 10px;
-  background: #fffbe6;
-  border-radius: 8px;
-  padding: 10px 18px;
-  box-shadow: 0 2px 8px #ffe08255;
-}
-
-.record-tips ul {
-  margin: 0 0 0 18px;
-  padding: 0;
+  color: #666;
+  box-shadow: 0 2px 8px #e0e0e055;
 }
 
 .waveform-canvas {
-  width: 400px;
-  height: 80px;
-  background: #e3f2fd;
-  border-radius: 8px;
-  margin-bottom: 10px;
+  width: 320px;
+  height: 60px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px #b3e5fc33;
+  margin: 18px 0 10px 0;
+  display: block;
 }
 
 .volume-feedback {
   font-size: 16px;
   font-weight: bold;
   margin-bottom: 10px;
+  padding: 4px 18px;
+  border-radius: 16px;
+  background: #e3f2fd;
+  color: #2196f3;
+  box-shadow: 0 1px 4px #b3e5fc33;
+  transition: background 0.3s, color 0.3s;
 }
 
-.volume-feedback.low { color: #e53935; }
-.volume-feedback.high { color: #e53935; }
-.volume-feedback.normal { color: #43a047; }
+.volume-feedback.low {
+  background: #fff3e0;
+  color: #ff9800;
+}
+
+.volume-feedback.high {
+  background: #ffebee;
+  color: #e53935;
+}
 
 .record-btn {
-  width: 100px;
-  height: 100px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
-  background: #ff3b3b;
-  color: #fff;
+  background: linear-gradient(135deg, #2196f3 60%, #64b5f6 100%);
   border: none;
-  outline: none;
-  font-size: 48px;
+  color: #fff;
+  font-size: 32px;
+  box-shadow: 0 4px 16px #2196f355;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 24px #ffb3b3aa;
   cursor: pointer;
-  transition: background 0.2s, box-shadow 0.2s;
+  margin-bottom: 8px;
+  transition: box-shadow 0.2s, background 0.2s, transform 0.2s;
+}
+
+.record-btn:hover {
+  box-shadow: 0 8px 32px #2196f399;
+  background: linear-gradient(135deg, #1976d2 60%, #64b5f6 100%);
+  transform: scale(1.07);
 }
 
 .record-btn.recording {
-  background: #b71c1c;
-  box-shadow: 0 0 0 8px #ffb3b355;
+  background: linear-gradient(135deg, #e53935 60%, #ffb300 100%);
+  animation: pulse 1.2s infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 #e5393533; }
+  70% { box-shadow: 0 0 0 16px #e5393500; }
+  100% { box-shadow: 0 0 0 0 #e5393500; }
 }
 
 .record-tip {
-  margin-top: 18px;
-  font-size: 18px;
-  color: #b71c1c;
-  font-weight: bold;
+  font-size: 15px;
+  color: #2196f3;
+  margin-bottom: 8px;
+  font-weight: 500;
 }
 
 .upload-status {
-  margin-top: 20px;
+  margin: 18px 0 0 0;
 }
 
 .analysis-result {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #ebeef5;
+  margin-top: 28px;
+  background: #f5f7fa;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px #b3e5fc33;
+  padding: 18px 20px;
 }
 
 .analysis-result h3 {
-  margin-bottom: 16px;
-  color: #303133;
+  color: #2196f3;
+  font-size: 18px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 600px) {
+  .main-content {
+    padding: 20px 4px;
+  }
+  .upload-card {
+    width: 100%;
+    min-width: 0;
+    padding: 16px 4px;
+  }
+  .waveform-canvas {
+    width: 98vw;
+    min-width: 0;
+  }
 }
 </style> 

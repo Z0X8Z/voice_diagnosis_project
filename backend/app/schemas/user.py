@@ -22,15 +22,21 @@ class UserInDBBase(UserBase):
     id: int
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 class User(BaseModel):
     id: int
     email: EmailStr
     username: str
-    
     class Config:
-        from_attributes = True
+        orm_mode = True
+
+class UserSchema(BaseModel):
+    id: int
+    email: EmailStr
+    username: str
+    class Config:
+        orm_mode = True
 
 class UserInDB(UserInDBBase):
     hashed_password: str

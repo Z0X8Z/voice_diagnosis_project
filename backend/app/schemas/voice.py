@@ -9,7 +9,7 @@ class VoiceHistoryRecord(BaseModel):
     created_at: datetime
     prediction: str = ""
     confidence: float = 0.0
-    llm_suggestion: Optional[str] = None
+    diagnosis_suggestion: Optional[str] = None
     llm_processed_at: Optional[datetime] = None
 
 class VoiceHistoryResponse(BaseModel):

@@ -37,52 +37,37 @@ class LLMRepository:
         return metrics
     
     def get_conversation_history(self, session_id: int) -> List[Dict[str, Any]]:
-        """获取对话历史"""
+        """获取对话历史（已不再依赖 conversation_history 字段）"""
         logger.info(f"[get_conversation_history] 开始获取对话历史: session_id={session_id}")
         session = self.db.query(DiagnosisSession).filter(
             DiagnosisSession.id == session_id
         ).first()
-        
         if not session:
             logger.warning(f"[get_conversation_history] 会话不存在: session_id={session_id}")
             return []
-        
-        if not session.conversation_history:
-            # 如果没有对话历史，但有llm_suggestion，则用它作为第一条助手消息
-            if session and session.llm_suggestion:
-                logger.info(f"[get_conversation_history] 无对话历史，使用llm_suggestion作为初始消息: session_id={session_id}")
-                return [{
+        # 仅返回诊断建议作为初始消息
+        if session.diagnosis_suggestion:
+            return [{
                 "role": "assistant",
-                "content": session.llm_suggestion,
-                "created_at": session.llm_processed_at
-                }]
-            logger.info(f"[get_conversation_history] 无对话历史: session_id={session_id}")
-            return []
-        
-        # 尝试解析JSON格式的对话历史
-        try:
-            conversation = json.loads(session.conversation_history)
-            logger.info(f"[get_conversation_history] 成功读取对话历史: session_id={session_id}, 消息数量={len(conversation)}")
-            return conversation
-        except Exception as e:
-            logger.error(f"[get_conversation_history] 解析对话历史JSON失败: session_id={session_id}, error={str(e)}")
-            # 如果解析失败，返回空列表
-            return []
+                "content": session.diagnosis_suggestion,
+                "created_at": session.created_at
+            }]
+        return []
     
-    def update_session_llm_suggestion(self, session_id: int, suggestion: str) -> None:
-        """更新会话的 LLM 建议"""
-        logger.info(f"[update_session_llm_suggestion] 开始更新LLM建议: session_id={session_id}")
+    def update_session_diagnosis_suggestion(self, session_id: int, suggestion: str) -> None:
+        """更新会话的诊断建议"""
+        logger.info(f"[update_session_diagnosis_suggestion] 开始更新诊断建议: session_id={session_id}")
         session = self.db.query(DiagnosisSession).filter(
             DiagnosisSession.id == session_id
         ).first()
         
         if session:
-            session.llm_suggestion = suggestion
-            session.llm_processed_at = datetime.utcnow()
+            session.diagnosis_suggestion = suggestion
+            session.created_at = datetime.utcnow()
             self.db.commit()
-            logger.info(f"[update_session_llm_suggestion] LLM建议更新成功: session_id={session_id}")
+            logger.info(f"[update_session_diagnosis_suggestion] 诊断建议更新成功: session_id={session_id}")
         else:
-            logger.error(f"[update_session_llm_suggestion] 会话不存在，无法更新LLM建议: session_id={session_id}")
+            logger.error(f"[update_session_diagnosis_suggestion] 会话不存在，无法更新诊断建议: session_id={session_id}")
     
     def get_voice_history(
         self,
@@ -141,7 +126,8 @@ class LLMRepository:
             "prediction_distribution": prediction_distribution,
             "average_confidence": average_confidence
         }
-    
+    #主数据流用到
+
     def get_analysis_history(self, user_id: int, skip: int, limit: int) -> List[Dict[str, Any]]:
         """获取分析历史"""
         sessions = self.db.query(DiagnosisSession).filter(
@@ -157,8 +143,8 @@ class LLMRepository:
                 "session_id": session.id,
                 "created_at": session.created_at,
                 "health_status": voice_metrics.model_prediction if voice_metrics else None,
-                "llm_suggestion": session.llm_suggestion,
-                "llm_processed_at": session.llm_processed_at
+                "diagnosis_suggestion": session.diagnosis_suggestion,
+                "llm_processed_at": session.created_at
             })
         return history
     
@@ -249,34 +235,7 @@ class LLMRepository:
             }
         }
     
-    def update_session_diagnosis_suggestion(self, session_id: int, suggestion: str) -> None:
-        """更新会话的诊断建议（总结）"""
-        logger.info(f"[update_session_diagnosis_suggestion] 开始更新诊断建议: session_id={session_id}")
-        session = self.db.query(DiagnosisSession).filter(
-            DiagnosisSession.id == session_id
-        ).first()
-        
-        if session:
-            session.diagnosis_suggestion = suggestion
-            self.db.commit()
-            logger.info(f"[update_session_diagnosis_suggestion] 诊断建议更新成功: session_id={session_id}")
-        else:
-            logger.error(f"[update_session_diagnosis_suggestion] 会话不存在，无法更新诊断建议: session_id={session_id}")
-
     def save_conversation(self, session_id: int, conversation: list) -> None:
-        """保存对话历史"""
-        logger.info(f"[save_conversation] 开始保存对话历史: session_id={session_id}, 消息数量={len(conversation)}")
-        session = self.db.query(DiagnosisSession).filter(
-            DiagnosisSession.id == session_id
-        ).first()
-        
-        if session:
-            try:
-                session.conversation_history = json.dumps(conversation)
-                self.db.commit()
-                logger.info(f"[save_conversation] 对话历史保存成功: session_id={session_id}")
-            except Exception as e:
-                logger.error(f"[save_conversation] 保存对话历史失败: session_id={session_id}, error={str(e)}")
-                self.db.rollback()
-        else:
-            logger.error(f"[save_conversation] 会话不存在，无法保存对话历史: session_id={session_id}") 
+        """保存对话历史（字段已废弃，方法保留空实现以兼容调用）"""
+        logger.info(f"[save_conversation] 已废弃，不再保存对话历史: session_id={session_id}")
+        pass 

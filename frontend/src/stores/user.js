@@ -85,13 +85,20 @@ export const useUserStore = defineStore('user', {
         
         console.log('登录响应:', response.data) // 调试信息
         
-        const { access_token } = response.data
+        const { access_token, refresh_token } = response.data
         if (!access_token) {
           throw new Error('服务器未返回token')
         }
         
         this.token = access_token
         localStorage.setItem('token', access_token)
+        if (refresh_token) {
+          localStorage.setItem('refresh_token', refresh_token)
+        }
+        
+        // 登录成功后立即获取用户信息
+        await this.fetchUserInfo()
+        
         return true
       } catch (error) {
         console.error('登录失败:', error.response?.data || error.message) // 调试信息
@@ -130,6 +137,7 @@ export const useUserStore = defineStore('user', {
       this.token = ''
       this.userInfo = null
       localStorage.removeItem('token')
+      localStorage.removeItem('refresh_token')
     },
     
     clearError() {
@@ -147,6 +155,48 @@ export const useUserStore = defineStore('user', {
     clearLatestDetection() {
       this.latestKpi = null
       this.latestLlmSuggestion = null
+    },
+
+    async refreshToken() {
+      try {
+        const refresh_token = localStorage.getItem('refresh_token')
+        if (!refresh_token) throw new Error('无refresh_token')
+        const response = await axios.post('/api/v1/auth/refresh', { refresh_token })
+        const { access_token } = response.data
+        if (!access_token) throw new Error('服务器未返回新token')
+        this.token = access_token
+        localStorage.setItem('token', access_token)
+        return access_token
+      } catch (error) {
+        this.logout()
+        throw error
+      }
+    },
+
+    async fetchUserInfo() {
+      try {
+        console.log('获取用户信息...')
+        const response = await api.get('/users/me')
+        console.log('用户信息响应:', response.data)
+        this.userInfo = response.data
+        return response.data
+      } catch (error) {
+        console.error('获取用户信息失败:', error.response?.data || error.message)
+        if (error.response?.status === 401) {
+          // Token可能已过期，尝试刷新
+          try {
+            await this.refreshToken()
+            // 刷新成功后重试
+            const retryResponse = await api.get('/users/me')
+            this.userInfo = retryResponse.data
+            return retryResponse.data
+          } catch (refreshError) {
+            console.error('刷新token失败:', refreshError)
+            this.logout()
+          }
+        }
+        return null
+      }
     }
   }
 }) 

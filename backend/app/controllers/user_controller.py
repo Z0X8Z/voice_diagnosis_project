@@ -6,6 +6,8 @@ from app.services.user_service import UserService
 from typing import Dict, Any, List, Optional
 from fastapi import HTTPException
 from app.db.models import User
+import logging
+from app.core.security import get_password_hash
 
 router = APIRouter()
 
@@ -62,6 +64,7 @@ async def get_all_users(
 class UserController:
     def __init__(self, db: Session):
         self.db = db
+        self.logger = logging.getLogger(__name__)
 
     def get_user(self, user_id: int) -> Optional[User]:
         """获取单个用户"""
@@ -99,16 +102,25 @@ class UserController:
         user_in: UserUpdate
     ) -> Optional[User]:
         """更新用户信息"""
+        self.logger.error(f"进入 UserController.update_user, user_id={user_id}, user_in={user_in}")
         user = self.get_user(user_id)
         if not user:
+            self.logger.error("未找到用户")
             return None
-
         update_data = user_in.dict(exclude_unset=True)
+        self.logger.error(f"update_data={update_data}")
         for field, value in update_data.items():
-            setattr(user, field, value)
-
+            if field == "password":
+                user.hashed_password = get_password_hash(value)
+                self.logger.error(f"加密并更新密码: {value} -> {user.hashed_password}")
+            else:
+                self.logger.error(f"更新字段: {field}={value}")
+                setattr(user, field, value)
+        self.logger.error("准备提交数据库")
         self.db.commit()
+        self.logger.error("数据库提交完成，准备刷新")
         self.db.refresh(user)
+        self.logger.error(f"用户更新完成: id={user.id}, email={user.email}, username={user.username}")
         return user
 
     def delete_user(self, user_id: int) -> bool:

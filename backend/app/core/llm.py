@@ -10,9 +10,22 @@ from openai import AsyncOpenAI
 from app.core.config import settings
 # 暂时移除tenacity依赖
 # from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+import traceback
 
 # 配置日志
 logger = logging.getLogger(__name__)
+
+LLM_CLIENT_INSTANCE = None
+
+def get_llm_client():
+    """获取 LLMClient 单例实例，若不存在则创建"""
+    global LLM_CLIENT_INSTANCE
+    if LLM_CLIENT_INSTANCE is None:
+        logger.info("[get_llm_client] 首次创建 LLMClient 单例实例")
+        LLM_CLIENT_INSTANCE = LLMClient()
+    else:
+        logger.debug("[get_llm_client] 返回已有的 LLMClient 单例实例")
+    return LLM_CLIENT_INSTANCE
 
 class LLMClient:
     """
@@ -21,11 +34,15 @@ class LLMClient:
     
     def __init__(self):
         """初始化LLM客户端"""
-        # 从环境变量获取配置
-        self.api_key = os.getenv("OPENAI_API_KEY", "")
-        self.api_base = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
-        self.model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
-        self.timeout = int(os.getenv("LLM_API_TIMEOUT", "60"))
+        # 打印调用栈以追踪初始化来源
+        stack_trace = traceback.format_stack()
+        logger.info(f"[LLMClient.__init__] LLMClient 初始化被调用，调用栈：\n{''.join(stack_trace[:-1])}")
+        
+        # 优先从环境变量获取，否则用 settings
+        self.api_key = os.getenv("OPENAI_API_KEY") or settings.OPENAI_API_KEY
+        self.api_base = os.getenv("OPENAI_API_BASE", getattr(settings, "OPENAI_API_BASE", "https://api.openai.com/v1"))
+        self.model = os.getenv("OPENAI_MODEL", getattr(settings, "OPENAI_MODEL", "gpt-3.5-turbo"))
+        self.timeout = int(os.getenv("LLM_API_TIMEOUT", "120"))
         self.max_retries = int(os.getenv("LLM_MAX_RETRIES", "3"))
         self.temperature = float(os.getenv("LLM_TEMPERATURE", "0.3"))
         
@@ -88,40 +105,48 @@ class LLMClient:
                         "Content-Type": "application/json",
                         "Authorization": f"Bearer {self.api_key}"
                     }
-                    
                     response = await client.post(
                         f"{self.api_base}/chat/completions",
                         headers=headers,
                         json=data
                     )
-                    
-                    # 检查响应状态
                     if response.status_code != 200:
                         logger.error(f"[LLMClient.analyze] API请求失败: status_code={response.status_code}, response={response.text}")
                         if attempt < self.max_retries - 1:
-                            retry_delay = 2 ** attempt  # 指数退避
+                            retry_delay = 2 ** attempt
                             logger.info(f"[LLMClient.analyze] 将在{retry_delay}秒后重试, 尝试次数: {attempt+1}/{self.max_retries}")
                             await asyncio.sleep(retry_delay)
                             continue
                         else:
                             raise Exception(f"API请求失败，状态码: {response.status_code}，响应: {response.text}")
-                    
-                    # 解析响应
                     resp_json = response.json()
                     response_text = resp_json["choices"][0]["message"]["content"]
-                    
-                    # 记录响应信息
                     duration_ms = int((time.time() - start_time) * 1000)
                     tokens_used = resp_json.get("usage", {}).get("total_tokens", 0)
                     logger.info(f"[LLMClient.analyze] API请求成功: length={len(response_text)}, tokens={tokens_used}, duration_ms={duration_ms}")
-                    
-                    # 成功获取响应，退出重试循环
                     break
-                    
+            except httpx.ReadTimeout:
+                logger.error(f"[LLMClient.analyze] LLM请求超时", exc_info=True)
+                if attempt < self.max_retries - 1:
+                    retry_delay = 2 ** attempt
+                    logger.info(f"[LLMClient.analyze] 将在{retry_delay}秒后重试, 尝试次数: {attempt+1}/{self.max_retries}")
+                    await asyncio.sleep(retry_delay)
+                else:
+                    logger.error(f"[LLMClient.analyze] 达到最大重试次数，请求超时")
+                    raise Exception("LLM分析服务超时，请稍后重试。")
+            except httpx.ConnectError:
+                logger.error(f"[LLMClient.analyze] LLM连接失败", exc_info=True)
+                if attempt < self.max_retries - 1:
+                    retry_delay = 2 ** attempt
+                    logger.info(f"[LLMClient.analyze] 将在{retry_delay}秒后重试, 尝试次数: {attempt+1}/{self.max_retries}")
+                    await asyncio.sleep(retry_delay)
+                else:
+                    logger.error(f"[LLMClient.analyze] 达到最大重试次数，连接失败")
+                    raise Exception("无法连接到LLM分析服务，请检查网络或稍后重试。")
             except Exception as e:
                 logger.error(f"[LLMClient.analyze] API请求异常: {str(e)}", exc_info=True)
                 if attempt < self.max_retries - 1:
-                    retry_delay = 2 ** attempt  # 指数退避
+                    retry_delay = 2 ** attempt
                     logger.info(f"[LLMClient.analyze] 将在{retry_delay}秒后重试, 尝试次数: {attempt+1}/{self.max_retries}")
                     await asyncio.sleep(retry_delay)
                 else:

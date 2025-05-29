@@ -118,7 +118,8 @@ class AuthController:
             
             logger.info(f"用户登录成功: {username}")
             access_token = self.create_access_token(data={"sub": user.email})
-            return Token(access_token=access_token, token_type="bearer")
+            refresh_token = self.create_access_token(data={"sub": user.email}, expires_delta=timedelta(days=7))
+            return Token(access_token=access_token, refresh_token=refresh_token, token_type="bearer")
             
         except HTTPException:
             raise

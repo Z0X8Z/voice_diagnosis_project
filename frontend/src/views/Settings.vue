@@ -1,149 +1,72 @@
 <template>
   <div class="settings-container">
-    <header class="nav-header">
-      <div class="logo-title">
-        <img :src="logo" class="logo-img" />
-        <span class="system-title">声肺康智能分析</span>
-      </div>
-      <div class="nav-right">
-      <el-menu
-        :default-active="activeIndex"
-        class="nav-menu"
-        mode="horizontal"
-        router
-      >
-        <el-menu-item index="/home">主页</el-menu-item>
-        <el-menu-item index="/dashboard">仪表盘</el-menu-item>
-        <el-menu-item index="/settings">设置</el-menu-item>
-      </el-menu>
-        <el-dropdown @command="handleCommand">
-          <el-button type="primary" plain>
-            <el-icon><User /></el-icon>
-            用户菜单
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="profile">个人信息</el-dropdown-item>
-              <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-      </div>
-    </header>
     <div class="main-content">
-      <el-row :gutter="20">
-        <el-col :span="12">
-          <el-card class="settings-card">
-            <template #header>
-              <div class="card-header">
-                <span>用户设置</span>
-              </div>
-            </template>
-            <el-form
-              ref="userFormRef"
-              :model="userForm"
-              :rules="userRules"
-              label-width="100px"
-            >
-              <el-form-item label="用户名" prop="username">
-                <el-input v-model="userForm.username" />
-              </el-form-item>
-              <el-form-item label="邮箱" prop="email">
-                <el-input v-model="userForm.email" />
-              </el-form-item>
-              <el-form-item label="修改密码" prop="newPassword">
-                <el-input
-                  v-model="userForm.newPassword"
-                  type="password"
-                  show-password
-                  placeholder="输入新密码"
-                />
-              </el-form-item>
-              <el-form-item label="确认密码" prop="confirmPassword">
-                <el-input
-                  v-model="userForm.confirmPassword"
-                  type="password"
-                  show-password
-                  placeholder="再次输入新密码"
-                />
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" @click="saveUserSettings">
-                  保存设置
-                </el-button>
-              </el-form-item>
-            </el-form>
-          </el-card>
-        </el-col>
-        <el-col :span="12">
-          <el-card class="settings-card">
-            <template #header>
-              <div class="card-header">
-                <span>系统设置</span>
-              </div>
-            </template>
-            <el-form
-              ref="systemFormRef"
-              :model="systemForm"
-              label-width="120px"
-            >
-              <el-form-item label="自动保存分析结果">
-                <el-switch v-model="systemForm.autoSave" />
-              </el-form-item>
-              <el-form-item label="分析结果通知">
-                <el-switch v-model="systemForm.notifications" />
-              </el-form-item>
-              <el-form-item label="主题">
-                <el-select v-model="systemForm.theme">
-                  <el-option label="浅色" value="light" />
-                  <el-option label="深色" value="dark" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="语言">
-                <el-select v-model="systemForm.language">
-                  <el-option label="简体中文" value="zh-CN" />
-                  <el-option label="English" value="en-US" />
-                </el-select>
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" @click="saveSystemSettings">
-                  保存设置
-                </el-button>
-              </el-form-item>
-            </el-form>
-          </el-card>
-        </el-col>
-      </el-row>
+      <el-card class="settings-card">
+        <template #header>
+          <div class="card-header">
+            <span>用户设置</span>
+          </div>
+        </template>
+        <el-form
+          ref="userFormRef"
+          :model="userForm"
+          :rules="userRules"
+          label-width="100px"
+        >
+          <el-form-item label="用户名" prop="username">
+            <el-input v-model="userForm.username" />
+          </el-form-item>
+          <el-form-item label="邮箱" prop="email">
+            <el-input v-model="userForm.email" />
+          </el-form-item>
+          <el-form-item label="修改密码" prop="newPassword">
+            <el-input
+              v-model="userForm.newPassword"
+              type="password"
+              show-password
+              placeholder="输入新密码"
+            />
+          </el-form-item>
+          <el-form-item label="确认密码" prop="confirmPassword">
+            <el-input
+              v-model="userForm.confirmPassword"
+              type="password"
+              show-password
+              placeholder="再次输入新密码"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" @click="saveUserSettings" :loading="loading">
+              保存设置
+            </el-button>
+          </el-form-item>
+        </el-form>
+      </el-card>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { User } from '@element-plus/icons-vue'
-import logo from '../assets/logo.png'
 import { useUserStore } from '../stores/user'
+import { useApi } from '../composables/useApi'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const api = useApi()
 const userFormRef = ref(null)
-const systemFormRef = ref(null)
-const activeIndex = computed(() => route.path)
+const loading = ref(false)
+
 const userForm = ref({
   username: '',
   email: '',
   newPassword: '',
   confirmPassword: ''
 })
-const systemForm = ref({
-  autoSave: true,
-  notifications: true,
-  theme: 'light',
-  language: 'zh-CN'
-})
+
 const userRules = {
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
@@ -159,7 +82,7 @@ const userRules = {
   confirmPassword: [
     {
       validator: (rule, value, callback) => {
-        if (value !== userForm.value.newPassword) {
+        if (value && value !== userForm.value.newPassword) {
           callback(new Error('两次输入密码不一致'))
         } else {
           callback()
@@ -169,29 +92,126 @@ const userRules = {
     }
   ]
 }
+
+// 页面加载时获取用户信息
+onMounted(async () => {
+  try {
+    // 如果store中已有用户信息，直接使用
+    if (userStore.userInfo) {
+      userForm.value.username = userStore.userInfo.username || ''
+      userForm.value.email = userStore.userInfo.email || ''
+    } else {
+      // 否则重新获取用户信息
+      const userData = await userStore.fetchUserInfo()
+      if (userData) {
+        userForm.value.username = userData.username || ''
+        userForm.value.email = userData.email || ''
+      }
+    }
+  } catch (error) {
+    ElMessage.error('获取用户信息失败')
+  }
+})
+
 const saveUserSettings = async () => {
   if (!userFormRef.value) return
+
+  // 新增：前端主动校验密码输入
+  if (userForm.value.newPassword) {
+    // 如果输入了新密码，必须同时输入确认密码
+    if (!userForm.value.confirmPassword) {
+      ElMessage.error('请输入确认密码')
+      return
+    }
+    // 两次密码必须一致
+    if (userForm.value.newPassword !== userForm.value.confirmPassword) {
+      ElMessage.error('两次输入的密码不一致')
+      return
+    }
+  }
+
   try {
+    // 表单验证
     await userFormRef.value.validate()
+    
+    loading.value = true
+    
+    // 构建更新数据对象
+    const updateData = {
+      username: userForm.value.username,
+      email: userForm.value.email
+    }
+    
+    // 如果有输入新密码，则包含密码更新
+    if (userForm.value.newPassword) {
+      updateData.password = userForm.value.newPassword
+    }
+    
+    console.log('[DEBUG] updateData:', updateData)
+    
+    // 调用API更新用户信息
+    const response = await api.put('/users/me', updateData)
+    console.log('[DEBUG] API响应:', response)
+    
+    // 检查是否修改了密码
+    if (updateData.password) {
+      // 清除本地token
+      localStorage.removeItem('token')
+      // 调用 userStore 的登出方法（如果有）
+      if (userStore.logout) {
+        userStore.logout()
+      } else {
+        userStore.isLoggedIn = false
+        userStore.userInfo = null
+      }
+      // 跳转到登录页
+      ElMessage.success('密码修改成功，请重新登录')
+      router.push({ name: 'Login' })
+      return
+    }
+
+    // 更新本地存储的用户信息
+    await userStore.fetchUserInfo()
+    
+    // 清空密码字段
+    userForm.value.newPassword = ''
+    userForm.value.confirmPassword = ''
+    
     ElMessage.success('用户设置已保存')
   } catch (error) {
-    ElMessage.error('表单验证失败')
-  }
-}
-const saveSystemSettings = async () => {
-  try {
-    ElMessage.success('系统设置已保存')
-  } catch (error) {
-    ElMessage.error('保存设置失败')
-  }
-}
-const handleCommand = (command) => {
-  if (command === 'logout') {
-    userStore.logout()
-    ElMessage.success('已退出登录')
-    router.push('/login')
-  } else if (command === 'profile') {
-    router.push('/settings')
+    console.error('[DEBUG] 保存设置失败:', error)
+    if (error.config) {
+      console.error('[DEBUG] 请求体:', error.config.data)
+    }
+    if (error.response) {
+      console.error('[DEBUG] 响应内容:', error.response)
+    }
+    // 优化超时错误提示
+    if (error.code === 'ECONNABORTED') {
+      ElMessage.error('保存设置超时，可能是网络问题或服务器繁忙，请稍后重试')
+    } else if (error.response?.data?.detail) {
+      if (Array.isArray(error.response.data.detail)) {
+        // FastAPI/Pydantic风格的字段错误
+        const msg = error.response.data.detail.map(e => {
+          if (e.loc && e.msg) {
+            return `${e.loc.join('.')}: ${e.msg}`
+          } else if (typeof e === 'string') {
+            return e
+          } else {
+            return JSON.stringify(e)
+          }
+        }).join('\n')
+        ElMessage.error(msg)
+      } else if (typeof error.response.data.detail === 'string') {
+        ElMessage.error(error.response.data.detail)
+      } else {
+        ElMessage.error(JSON.stringify(error.response.data.detail))
+      }
+    } else {
+      ElMessage.error('保存设置失败')
+    }
+  } finally {
+    loading.value = false
   }
 }
 </script>
@@ -201,52 +221,38 @@ const handleCommand = (command) => {
   min-height: 100vh;
   background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%);
 }
-.nav-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #fff;
-  box-shadow: 0 2px 8px #e0e0e0;
-  padding: 0 40px;
-  height: 64px;
-}
-.logo-title {
-  display: flex;
-  align-items: center;
-}
-.logo-img {
-  height: 40px;
-  margin-right: 16px;
-}
-.system-title {
-  font-size: 22px;
-  font-weight: bold;
-  color: #2196f3;
-  letter-spacing: 2px;
-}
-.nav-menu {
-  background: transparent;
-  border-bottom: none;
-}
+
 .main-content {
   padding: 80px 20px 20px;
-  max-width: 1200px;
+  max-width: 600px;
   margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
 }
+
 .settings-card {
-  margin-bottom: 20px;
-  border-radius: 18px;
-  box-shadow: 0 4px 24px #b3e5fc55;
+  width: 100%;
+  border-radius: 22px;
+  box-shadow: 0 4px 32px #b3e5fc55;
   background: #fff;
+  padding: 32px 24px 24px 24px;
 }
+
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-.card-header span {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: bold;
-  color: #303133;
+  color: #2196f3;
 }
-</style> 
+
+.el-form {
+  margin-top: 18px;
+}
+
+.el-form-item {
+  margin-bottom: 28px;
+}
+</style>

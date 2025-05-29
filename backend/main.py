@@ -90,15 +90,28 @@ def check_db_status(db: Session = Depends(get_db)):
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     logger.error("====== 422 Unprocessable Entity Traceback ======")
-    logger.error(f"URL: {request.url}")
+    try:
+        logger.error(f"URL: {request.method} {request.url}")
+    except Exception as e:
+        logger.error(f"无法获取URL: {e}")
     try:
         body = await request.body()
-        logger.error(f"Body: {body}")
+        logger.error(f"Body: {body.decode('utf-8')}")
     except Exception as e:
         logger.error(f"无法获取请求体: {e}")
-    logger.error(f"Errors: {exc.errors()}")
-    logger.error(f"Error str: {str(exc)}")
-    logger.error("===============================================")
+    try:
+        logger.error(f"Headers: {dict(request.headers)}")
+    except Exception as e:
+        logger.error(f"无法获取请求头: {e}")
+    try:
+        logger.error(f"Errors: {exc.errors()}")
+    except Exception as e:
+        logger.error(f"无法获取errors: {e}")
+    try:
+        logger.error(f"Error str: {str(exc)}")
+    except Exception as e:
+        logger.error(f"无法获取error str: {e}")
+    logger.error("===============================================" )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={"detail": exc.errors()},

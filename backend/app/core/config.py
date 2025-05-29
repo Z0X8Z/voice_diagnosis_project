@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     # OpenAI配置
     OPENAI_API_KEY: str = "sk-mkmgtzssdtykqpaigcotikbjpqbylqrpokblhswjyjnpbfbz"
-    OPENAI_MODEL: str = "Qwen/Qwen3-8B"
+    OPENAI_MODEL: str = "Pro/deepseek-ai/DeepSeek-V3"
     OPENAI_API_BASE: str = "https://api.siliconflow.cn/v1"
 
     @validator("BACKEND_CORS_ORIGINS", pre=True)

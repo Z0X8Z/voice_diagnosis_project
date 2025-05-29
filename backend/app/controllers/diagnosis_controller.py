@@ -7,74 +7,7 @@ from typing import Dict, Any, List
 from app.services.llm_service import LLMService
 from app.repositories.llm_repository import LLMRepository
 
-router = APIRouter()
 
-@router.post("/upload")
-async def upload_voice(
-    *,
-    db: Session = Depends(get_db),
-    file: UploadFile,
-    user_id: int,
-    background_tasks: BackgroundTasks
-) -> Dict[str, Any]:
-    """上传语音文件"""
-    voice_service = VoiceAnalysisService(db)
-    return await voice_service.handle_voice_upload(file, user_id, background_tasks)
-
-@router.get("/session/{session_id}")
-async def get_session_result(
-    *,
-    db: Session = Depends(get_db),
-    session_id: int,
-    user_id: int
-) -> Dict[str, Any]:
-    """获取诊断会话结果"""
-    voice_service = VoiceAnalysisService(db)
-    return await voice_service.get_session_result(session_id, user_id)
-
-@router.get("/visualization/{metrics_id}")
-async def get_visualization_data(
-    *,
-    db: Session = Depends(get_db),
-    metrics_id: int,
-    user_id: int
-) -> Dict[str, Any]:
-    """获取可视化数据"""
-    voice_service = VoiceAnalysisService(db)
-    return await voice_service.get_visualization_data(metrics_id, user_id)
-
-@router.post("/analyze/{session_id}")
-async def analyze_with_llm(
-    *,
-    db: Session = Depends(get_db),
-    session_id: int,
-    user_id: int
-) -> Dict[str, Any]:
-    """使用 LLM 对诊断会话进行分析"""
-    voice_service = VoiceAnalysisService(db)
-    return await voice_service.analyze_with_llm(session_id, user_id)
-
-@router.get("/history")
-async def get_voice_history(
-    *,
-    db: Session = Depends(get_db),
-    user_id: int,
-    page: int = 1,
-    size: int = 10
-) -> Dict[str, Any]:
-    """获取用户的语音分析历史记录"""
-    voice_service = VoiceAnalysisService(db)
-    return await voice_service.get_voice_history(user_id, page, size)
-
-@router.get("/stats")
-async def get_voice_stats(
-    *,
-    db: Session = Depends(get_db),
-    user_id: int
-) -> Dict[str, Any]:
-    """获取用户的语音分析统计数据"""
-    voice_service = VoiceAnalysisService(db)
-    return await voice_service.get_voice_stats(user_id)
 
 class DiagnosisController:
     """诊断控制器，负责协调语音分析和 LLM 服务"""
@@ -209,7 +142,7 @@ class DiagnosisController:
             实时监控数据
         """
         return await self.llm_service.get_realtime_data(user_id) 
-
+#主数据流用到
     async def upload_voice_file(self, file, user_id, background_tasks):
         """上传语音文件并处理"""
         return await self.voice_analysis_service.handle_voice_upload(file, user_id, background_tasks) 

@@ -121,7 +121,7 @@ class DiagnosisRepository:
             "prediction_distribution": prediction_distribution,
             "average_confidence": avg_confidence
         }
-    
+    #主数据流用到
     def create_session(self, user_id: int):
         session = DiagnosisSession(
             user_id=user_id,
@@ -145,7 +145,7 @@ class DiagnosisRepository:
     def save_voice_metrics(self, session_id: int, user_id: int, features: dict, prediction: dict):
         logger = logging.getLogger(__name__)
         try:
-            logger.info(f"[save_voice_metrics] session_id={session_id}, user_id={user_id}, features={features}, prediction={prediction}")
+            logger.info(f"[save_voice_metrics] session_id={session_id}, user_id={user_id},  prediction={prediction}")
             metrics = VoiceMetrics(
                 session_id=session_id,
                 user_id=user_id,
@@ -202,7 +202,6 @@ class DiagnosisRepository:
                 logger.warning(f"[mark_session_completed] 会话不存在: {session_id}")
                 return None
                 
-            session.analysis_progress = 100
             session.completed_at = datetime.utcnow()
             self.db.commit()
             self.db.refresh(session)
@@ -212,20 +211,16 @@ class DiagnosisRepository:
             logger.error(f"[mark_session_completed] 标记会话失败: {str(e)}", exc_info=True)
             raise
     
-    def mark_session_failed(self, session_id: int, error_message: str) -> DiagnosisSession:
-        """标记诊断会话为失败"""
+    def mark_session_failed(self, session_id: int) -> DiagnosisSession:
+        """标记诊断会话为失败（已移除 error_message 字段，仅更新时间）"""
         logger = logging.getLogger(__name__)
         try:
             session = self.db.query(DiagnosisSession).filter(
                 DiagnosisSession.id == session_id
             ).first()
-            
             if not session:
                 logger.warning(f"[mark_session_failed] 会话不存在: {session_id}")
                 return None
-                
-            session.analysis_progress = -1
-            session.error_message = error_message
             session.completed_at = datetime.utcnow()
             self.db.commit()
             self.db.refresh(session)

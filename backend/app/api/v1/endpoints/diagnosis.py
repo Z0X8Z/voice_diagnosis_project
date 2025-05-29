@@ -1,6 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, BackgroundTasks, Query
+
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, BackgroundTasks, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List, Optional
 from sqlalchemy.sql import func
@@ -11,9 +12,11 @@ from app.db.session import get_db
 from app.db.models import User, VoiceMetrics, DiagnosisSession
 from app.controllers.diagnosis_controller import DiagnosisController
 from app.schemas.voice import VoiceHistoryResponse, VoiceStatsResponse
+from app.websockets.manager import websocket_manager
 
 router = APIRouter()
 
+#主数据流路由
 @router.post("/upload")
 async def upload_voice_file(
     *,
@@ -35,7 +38,7 @@ async def upload_voice_file(
             status_code=500,
             detail=f"文件上传失败: {str(e)}"
         )
-
+#疑似删除项目
 @router.get("/voice-history", response_model=VoiceHistoryResponse)
 async def get_voice_history(
     db: Session = Depends(get_db),
@@ -89,6 +92,7 @@ async def get_visualization_data(
             status_code=500,
             detail=f"获取可视化数据失败: {str(e)}"
         )
+
 
 @router.post("/llm/{session_id}")
 async def analyze_with_llm(
@@ -178,15 +182,27 @@ async def get_latest_result(
     return {
         "session_id": session.id,
         "created_at": session.created_at,
-        "llm_suggestion": session.llm_suggestion,
+        "diagnosis_suggestion": session.diagnosis_suggestion,
         "conversation_history": session.conversation_history,
-        "voice_metrics": {
-            "prediction": metrics.model_prediction if metrics else None,
-            "confidence": metrics.model_confidence if metrics else None,
-            "mfcc": [getattr(metrics, f"mfcc_{i}") for i in range(1, 14)] if metrics else [],
-            "chroma": [getattr(metrics, f"chroma_{i}") for i in range(1, 13)] if metrics else [],
+        "metrics": {
+            "session_id": session.id,
+            "model_prediction": metrics.model_prediction if metrics else None,
+            "model_confidence": metrics.model_confidence if metrics else None,
             "rms": metrics.rms if metrics else None,
             "zcr": metrics.zcr if metrics else None,
+            "mfcc": [getattr(metrics, f"mfcc_{i}") for i in range(1, 14)] if metrics else [],
+            "chroma": [getattr(metrics, f"chroma_{i}") for i in range(1, 13)] if metrics else [],
             "mel_spectrogram": metrics.mel_spectrogram if metrics else None
         }
-    } 
+    }
+
+@router.websocket("/ws/diagnosis/{user_id}")
+async def diagnosis_ws(websocket: WebSocket, user_id: int):
+    logger.info(f"WebSocket连接建立: user_id={user_id}")
+    await websocket_manager.connect(websocket, user_id)
+    try:
+        while True:
+            await websocket.receive_text()  # 保持连接
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket断开: user_id={user_id}")
+        websocket_manager.disconnect(user_id) 

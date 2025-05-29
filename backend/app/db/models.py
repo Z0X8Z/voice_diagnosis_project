@@ -79,13 +79,13 @@ class DiagnosisSession(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     # 新增字段
-    analysis_progress = Column(Integer, default=0)  # 0-100
-    error_message = Column(Text, nullable=True)
+    # analysis_progress = Column(Integer, default=0)  # 0-100
+    # error_message = Column(Text, nullable=True)
+    # follow_up_questions = Column(Text, nullable=True)  # 后续问题
+    # conversation_history = Column(Text, nullable=True)  # 对话历史，存储为JSON字符串
     
     # LLM诊断建议
     diagnosis_suggestion = Column(Text, nullable=True)  # LLM生成的诊断建议
-    follow_up_questions = Column(Text, nullable=True)  # 后续问题
-    conversation_history = Column(Text, nullable=True)  # 对话历史，存储为JSON字符串
     
     # 关系
     user = relationship("User", back_populates="diagnosis_sessions")

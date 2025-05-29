@@ -291,4 +291,43 @@ async def get_voice_metrics(
         ],
         "rms": latest_metrics.rms,
         "zcr": latest_metrics.zcr
-    } 
+    }
+
+@router.get("/latest-session", response_model=dict)
+async def get_latest_session(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+) -> Any:
+    """获取最新的诊断会话，包含诊断建议和关联的语音指标"""
+    latest_session = db.query(DiagnosisSession).filter(
+        DiagnosisSession.user_id == current_user.id
+    ).order_by(DiagnosisSession.created_at.desc()).first()
+
+    if not latest_session:
+        return None
+
+    # 直接通过 session_id 查找 voice_metrics
+    metrics = db.query(VoiceMetrics).filter(
+        VoiceMetrics.session_id == latest_session.id
+    ).first()
+
+    result = {
+        "session_id": latest_session.id,
+        "created_at": latest_session.created_at,
+        "diagnosis_suggestion": latest_session.diagnosis_suggestion,
+        "metrics": None
+    }
+    
+    if metrics:
+        result["metrics"] = {
+            "model_prediction": metrics.model_prediction,
+            "model_confidence": metrics.model_confidence,
+            "rms": metrics.rms,
+            "zcr": metrics.zcr,
+            # MFCC 1-13
+            **{f"mfcc_{i}": getattr(metrics, f"mfcc_{i}", None) for i in range(1, 14)},
+            # Chroma 1-12
+            **{f"chroma_{i}": getattr(metrics, f"chroma_{i}", None) for i in range(1, 13)}
+        }
+    
+    return result 

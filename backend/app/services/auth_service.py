@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 import logging
 
 from app.repositories.auth_repository import AuthRepository
-from app.core.security import create_access_token, verify_password
+from app.core.security import create_access_token, create_refresh_token, verify_password
 from app.schemas.token import Token
 from app.schemas.user import UserCreate
 from app.core.config import settings
@@ -43,7 +43,8 @@ class AuthService:
             
             logger.info(f"用户登录成功: {username}")
             access_token = create_access_token(data={"sub": user.email})
-            return Token(access_token=access_token, token_type="bearer")
+            refresh_token = create_refresh_token(data={"sub": user.email})
+            return Token(access_token=access_token, refresh_token=refresh_token, token_type="bearer")
             
         except HTTPException:
             raise

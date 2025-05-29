@@ -9,14 +9,15 @@ import logging
 from app.core.security import get_current_user
 from app.db.session import get_db
 from app.db.models import User, DiagnosisSession, VoiceMetrics
-from app.services.llm_service import LLMService
 from app.controllers.llm_controller import LLMController
-from app.core.llm import LLMClient
 
 # 配置日志
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# 在路由模块初始化时记录
+logger.info("[llm.py] 初始化LLM路由模块")
 
 class FollowupQuestion(BaseModel):
     question: str
@@ -24,6 +25,7 @@ class FollowupQuestion(BaseModel):
 class ChatMessage(BaseModel):
     message: str
     session_id: Optional[int] = None
+    history: List[Dict[str, str]] = []
 
 class ConversationSummaryRequest(BaseModel):
     conversation: List[Dict[str, str]]
@@ -44,37 +46,15 @@ async def chat_with_llm(
     message: ChatMessage,
     current_user: User = Depends(get_current_user)
 ):
-    """与LLM进行对话"""
+    """与LLM进行对话（带历史）"""
+    logger.info(f"[API.chat] 接收聊天请求: user_id={current_user.id}")
+    controller = LLMController(db)
     try:
-        llm_client = LLMClient()
-        
-        # 构建提示词
-        prompt = f"""
-用户ID: {current_user.id}
-用户问题: {message.message}
-
-请根据用户的问题提供关于语音健康分析的回答。
-如果问题与语音健康无关，请礼貌地引导用户询问与语音健康相关的问题。
-"""
-        
-        # 调用LLM
-        analysis = await llm_client.analyze(prompt)
-        
-        # 如果提供了session_id，将对话保存到会话历史记录中
-        if message.session_id:
-            controller = LLMController(db)
-            await controller.save_conversation(
-                message.session_id, 
-                current_user.id, 
-                {"role": "user", "content": message.message},
-                {"role": "assistant", "content": analysis}
-            )
-        
-        return {
-            "analysis": analysis,
-            "timestamp": datetime.utcnow().isoformat()
-        }
+        result = await controller.chat_with_llm(current_user.id, message.message, message.session_id, message.history)
+        logger.info(f"[API.chat] 聊天请求处理成功: user_id={current_user.id}")
+        return result
     except Exception as e:
+        logger.error(f"[API.chat] 聊天请求处理失败: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"与AI助手对话失败: {str(e)}"
@@ -88,6 +68,7 @@ async def get_display_summary(
     current_user: User = Depends(get_current_user)
 ):
     """获取用于显示的摘要数据"""
+    logger.info(f"[API.summary] 获取摘要数据: user_id={current_user.id}")
     controller = LLMController(db)
     return await controller.get_display_summary(current_user.id)
 
@@ -99,6 +80,7 @@ async def get_realtime_data(
     current_user: User = Depends(get_current_user)
 ):
     """获取实时监控数据"""
+    logger.info(f"[API.realtime] 获取实时数据: user_id={current_user.id}")
     controller = LLMController(db)
     return await controller.get_realtime_data(current_user.id)
 
@@ -115,7 +97,7 @@ async def analyze_session(
     logger.info(f"[API.analyze] 开始分析会话: session_id={session_id}, user_id={current_user.id}")
     controller = LLMController(db)
     try:
-        result = await controller.llm_service.analyze_with_llm(session_id, current_user.id)
+        result = await controller.analyze_session(session_id, current_user.id)
         logger.info(f"[API.analyze] 分析会话成功: session_id={session_id}")
         return result
     except Exception as e:
@@ -173,6 +155,7 @@ async def get_latest_suggestion(
     """
     获取最新的 LLM 建议
     """
+    logger.info(f"[API.suggestion] 获取最新建议: session_id={session_id}, user_id={current_user.id}")
     controller = LLMController(db)
     return await controller.get_latest_suggestion(session_id, current_user.id)
 
@@ -186,6 +169,7 @@ async def get_analysis_history(
     current_user: User = Depends(get_current_user)
 ):
     """获取分析历史"""
+    logger.info(f"[API.history] 获取分析历史: user_id={current_user.id}, skip={skip}, limit={limit}")
     controller = LLMController(db)
     return await controller.get_analysis_history(current_user.id, skip, limit)
 
@@ -205,17 +189,20 @@ async def summarize_with_llm(
 async def summarize_conversation(
     session_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    conversation: Optional[List[Dict]] = Body(default=None)
 ):
     """
     总结对话内容，生成最终诊断建议，用于用户点击"完成"按钮后调用
     """
-    logger.info(f"[API.summarize] 总结对话请求: session_id={session_id}, user_id={current_user.id}")
+    logger.info(f"[API.summarize] 总结对话请求: session_id={session_id}, user_id={current_user.id}, 是否提供conversation: {conversation is not None}")
+    logger.info(f"[API.summarize] 收到的conversation类型: {type(conversation)}")
+    
     controller = LLMController(db)
     try:
-        result = await controller.summarize_conversation(session_id, current_user.id)
+        result = await controller.summarize_conversation(session_id, current_user.id, conversation)
         logger.info(f"[API.summarize] 总结对话成功: session_id={session_id}")
         return result
     except Exception as e:
-        logger.error(f"[API.summarize] 总结对话失败: session_id={session_id}, error={str(e)}")
+        logger.error(f"[API.summarize] 总结对话失败: session_id={session_id}, error={str(e)}", exc_info=True)
         raise

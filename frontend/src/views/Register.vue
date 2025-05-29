@@ -165,32 +165,83 @@ const handleRegister = async () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: #f5f5f5;
+  background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%);
 }
 
 .register-card {
   width: 400px;
-  padding: 20px;
+  padding: 32px 28px 24px 28px;
+  border-radius: 22px;
+  box-shadow: 0 4px 32px #b3e5fc55;
+  background: #fff;
 }
 
 .register-card h2 {
   text-align: center;
   margin-bottom: 30px;
-  color: #409EFF;
+  color: #2196f3;
+  font-size: 26px;
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+.el-form-item {
+  margin-bottom: 24px;
+}
+
+.el-input {
+  border-radius: 12px;
+  box-shadow: 0 1px 4px #b3e5fc22;
+  font-size: 16px;
+}
+
+.el-input:focus-within {
+  box-shadow: 0 0 0 2px #2196f3aa;
 }
 
 .submit-btn {
   width: 100%;
+  border-radius: 16px;
+  background: linear-gradient(90deg, #2196f3 60%, #64b5f6 100%);
+  font-size: 18px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.submit-btn:hover {
+  background: linear-gradient(90deg, #1976d2 60%, #64b5f6 100%);
+  box-shadow: 0 4px 16px #2196f355;
+}
+
+.el-alert {
+  margin-bottom: 18px;
+  border-radius: 12px;
+  font-size: 15px;
 }
 
 .login-link {
   text-align: center;
-  margin-top: 15px;
-  font-size: 14px;
+  margin-top: 18px;
+  font-size: 15px;
+  color: #888;
 }
 
 .login-link a {
-  color: #409EFF;
+  color: #2196f3;
   text-decoration: none;
+  font-weight: bold;
+  margin-left: 4px;
+  transition: color 0.2s;
+}
+.login-link a:hover {
+  color: #1976d2;
+}
+
+@media (max-width: 600px) {
+  .register-card {
+    width: 98vw;
+    min-width: 0;
+    padding: 16px 4px;
+  }
 }
 </style> 

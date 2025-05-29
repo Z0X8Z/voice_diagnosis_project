@@ -14,7 +14,7 @@ import json
 import numpy as np
 
 from app.repositories.diagnosis_repository import DiagnosisRepository
-from app.core.llm import LLMClient
+from app.core.llm import LLMClient, get_llm_client
 from app.schemas.voice import VoiceHistoryResponse, VoiceStatsResponse
 from app.utils.voice_models_utils import create_model
 
@@ -25,13 +25,15 @@ class VoiceAnalysisService:
     
     def __init__(self, db: Session):
         """初始化服务"""
+        self.db = db
+        logger.info("[VoiceAnalysisService.__init__] 初始化语音分析服务")
         self.model_service = VoiceModelService()
         self.llm_service = LLMService(db)
         self.supported_formats = ['.wav', '.mp3', '.ogg', '.flac', '.webm']
         self.upload_base_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
         logger.info(f"初始化语音分析服务，上传目录: {self.upload_base_dir}")
         self.repository = DiagnosisRepository(db)
-        self.llm_client = LLMClient()
+        self.llm_client = get_llm_client()
     
     def validate_filename(self, filename: str) -> bool:
         """验证文件名格式"""
@@ -46,6 +48,7 @@ class VoiceAnalysisService:
             logger.error(f"文件名验证失败: {str(e)}")
             return False
 
+  #主要变换流中心
     async def handle_voice_upload(
         self,
         file: UploadFile,
@@ -112,7 +115,7 @@ class VoiceAnalysisService:
                     logger.error(f"[handle_voice_upload] ffmpeg错误输出: {e.stderr}")
                     
                     # 标记会话为失败
-                    self.repository.mark_session_failed(session.id, f"音频转码失败: {str(e)}")
+                    self.repository.mark_session_failed(session.id)
                     
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
@@ -122,7 +125,7 @@ class VoiceAnalysisService:
                 # 检查wav文件是否成功创建
                 if not os.path.exists(wav_path) or os.path.getsize(wav_path) < 1000:
                     logger.error(f"[handle_voice_upload] WAV文件创建失败或太小: {wav_path}")
-                    self.repository.mark_session_failed(session.id, "WAV文件创建失败或太小")
+                    self.repository.mark_session_failed(session.id)
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="音频转换失败，请上传其他格式的音频文件"
@@ -178,7 +181,7 @@ class VoiceAnalysisService:
             # 如果会话已创建，标记为失败
             if 'session' in locals() and session:
                 try:
-                    self.repository.mark_session_failed(session.id, str(e))
+                    self.repository.mark_session_failed(session.id)
                 except Exception as mark_e:
                     logger.error(f"[handle_voice_upload] 标记会话失败时出错: {str(mark_e)}")
             
@@ -243,7 +246,6 @@ class VoiceAnalysisService:
                 "status": session.status,
                 "created_at": session.created_at,
                 "completed_at": session.completed_at,
-                "error_message": session.error_message,
                 "voice_metrics": {
                     "prediction": voice_metrics.model_prediction,
                     "confidence": voice_metrics.model_confidence,
@@ -315,60 +317,9 @@ class VoiceAnalysisService:
         self,
         session_id: int,
         user_id: int
-    ) -> Dict[str, Any]:
-        """使用 LLM 对诊断会话进行分析"""
-        try:
-            # 获取会话信息
-            session = self.repository.get_session_by_id(session_id, user_id)
-            if not session:
-                logger.warning(f"[analyze_with_llm] 诊断会话不存在: session_id={session_id}, user_id={user_id}")
-                return {"error": "诊断会话不存在"}
-            
-            # 获取语音指标
-            voice_metrics = self.repository.get_voice_metrics(session_id)
-            if not voice_metrics:
-                logger.warning(f"[analyze_with_llm] 语音指标不存在: session_id={session_id}")
-                self.repository.update_session_llm_suggestion(
-                    session_id, 
-                    "无法进行分析：未找到相关语音指标数据。"
-                )
-                return {"error": "语音指标不存在"}
-            
-            # 构建提示词
-            prompt = self._build_analysis_prompt(voice_metrics)
-            logger.info(f"[analyze_with_llm] 构建LLM分析提示词成功: session_id={session_id}")
-            
-            # 调用 LLM 进行分析
-            try:
-                logger.info(f"[analyze_with_llm] 开始调用LLM进行分析: session_id={session_id}")
-                analysis_result = await self.llm_client.analyze(prompt)
-                logger.info(f"[analyze_with_llm] LLM分析完成: session_id={session_id}")
-                
-                # 保存分析结果
-                self.repository.update_session_llm_suggestion(session_id, analysis_result)
-                logger.info(f"[analyze_with_llm] 保存LLM分析结果成功: session_id={session_id}")
-                
-                return {
-                    "session_id": session_id,
-                    "analysis": analysis_result,
-                    "timestamp": datetime.now()
-                }
-            except Exception as e:
-                logger.error(f"[analyze_with_llm] LLM分析失败: {str(e)}", exc_info=True)
-                # 保存错误信息
-                error_message = f"分析过程中出现错误: {str(e)}"
-                self.repository.update_session_llm_suggestion(session_id, error_message)
-                return {
-                    "session_id": session_id,
-                    "error": error_message,
-                    "timestamp": datetime.now()
-                }
-            
-        except Exception as e:
-            logger.error(f"[analyze_with_llm] 处理失败: {str(e)}", exc_info=True)
-            return {
-                "error": f"处理失败: {str(e)}"
-            }
+    ) -> dict:
+        """使用 LLMService 对诊断会话进行分析"""
+        return await self.llm_service.analyze_with_llm(session_id, user_id)
     
     async def get_voice_history(
         self,
@@ -396,7 +347,7 @@ class VoiceAnalysisService:
                         "created_at": record.created_at,
                         "prediction": str(record.model_prediction) if record.model_prediction else "",
                         "confidence": float(record.model_confidence) if record.model_confidence is not None else 0.0,
-                        "llm_suggestion": str(session.llm_suggestion) if session and session.llm_suggestion else None,
+                        "llm_suggestion": str(session.diagnosis_suggestion) if session and session.diagnosis_suggestion else None,
                         "llm_processed_at": session.llm_processed_at if session else None
                     }
                     history.append(history_record)
@@ -478,7 +429,7 @@ class VoiceAnalysisService:
         except Exception as e:
             logger.error(f"[_process_voice_file] 处理语音文件失败: {str(e)}", exc_info=True)
             # 标记会话为失败
-            self.repository.mark_session_failed(session_id, str(e))
+            self.repository.mark_session_failed(session_id)
     
     async def _extract_voice_features(self, file_path: str) -> dict:
         """使用工具箱中的模型工具提取语音特征"""

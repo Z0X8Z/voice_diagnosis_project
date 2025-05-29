@@ -1,10 +1,9 @@
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
+import logging
 from app.db.models import DiagnosisSession
 from app.services.llm_service import LLMService
-import json
-import logging
 
 # 配置日志
 logger = logging.getLogger(__name__)
@@ -14,6 +13,26 @@ class LLMController:
         self.db = db
         self.llm_service = LLMService(db)
 
+    async def chat_with_llm(
+        self,
+        user_id: int,
+        message: str,
+        session_id: Optional[int] = None,
+        history: Optional[List[Dict[str, str]]] = None
+    ) -> Dict[str, Any]:
+        """与LLM进行对话（带历史）"""
+        try:
+            logger.info(f"[LLMController.chat_with_llm] 开始处理聊天请求: user_id={user_id}, session_id={session_id}")
+            result = await self.llm_service.chat_with_llm(user_id, message, session_id, history)
+            logger.info(f"[LLMController.chat_with_llm] 聊天请求处理成功: user_id={user_id}")
+            return result
+        except Exception as e:
+            logger.error(f"[LLMController.chat_with_llm] 处理聊天请求失败: {str(e)}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"与AI助手对话失败: {str(e)}"
+            )
+
     async def analyze_session(
         self,
         session_id: int,
@@ -21,36 +40,17 @@ class LLMController:
     ) -> Dict[str, Any]:
         """分析诊断会话"""
         try:
-            session = self.db.query(DiagnosisSession).filter(
-                DiagnosisSession.id == session_id,
-                DiagnosisSession.user_id == user_id
-            ).first()
-            
-            if not session:
-                raise ValueError("Session not found")
-            
-            # 这里添加实际的 LLM 分析逻辑
-            # 示例：生成诊断建议
-            diagnosis_suggestion = "根据语音分析，建议进行进一步检查..."
-            follow_up_questions = ["您最近是否有其他症状？", "症状持续多久了？"]
-            
-            # 更新会话
-            session.diagnosis_suggestion = diagnosis_suggestion
-            session.follow_up_questions = json.dumps(follow_up_questions)
-            session.conversation_history = json.dumps([
-                {"role": "system", "content": "您是一位专业的医疗顾问。"},
-                {"role": "assistant", "content": diagnosis_suggestion}
-            ])
-            
-            self.db.commit()
-            
-            return {
-                "session_id": session.id,
-                "diagnosis_suggestion": diagnosis_suggestion,
-                "follow_up_questions": follow_up_questions
-            }
+            logger.info(f"[LLMController.analyze_session] 开始分析会话: session_id={session_id}, user_id={user_id}")
+            # 验证会话存在
+            await self._validate_session(session_id, user_id)
+            # 调用服务层进行分析
+            result = await self.llm_service.analyze_with_llm(session_id, user_id)
+            logger.info(f"[LLMController.analyze_session] 分析会话成功: session_id={session_id}")
+            return result
+        except HTTPException:
+            raise
         except Exception as e:
-            logger.error(f"[LLMController.analyze_session] 处理分析会话失败: {str(e)}", exc_info=True)
+            logger.error(f"[LLMController.analyze_session] 分析会话失败: {str(e)}", exc_info=True)
             raise HTTPException(
                 status_code=500,
                 detail=f"分析会话失败: {str(e)}"
@@ -62,13 +62,17 @@ class LLMController:
         user_id: int,
         question: str
     ) -> Dict[str, Any]:
-        """处理后续问题，保存对话历史"""
+        """处理后续问题"""
         logger.info(f"[LLMController.handle_follow_up] 开始处理用户问题: session_id={session_id}, user_id={user_id}")
         try:
-            # 调用LLM服务处理问题
+            # 验证会话存在
+            await self._validate_session(session_id, user_id)
+            # 调用服务层处理问题
             result = await self.llm_service.handle_follow_up(session_id, user_id, question)
             logger.info(f"[LLMController.handle_follow_up] 问题处理成功: session_id={session_id}")
             return result
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"[LLMController.handle_follow_up] 处理问题失败: {str(e)}", exc_info=True)
             raise HTTPException(
@@ -84,21 +88,10 @@ class LLMController:
         """获取对话历史"""
         logger.info(f"[LLMController.get_conversation_history] 获取对话历史: session_id={session_id}, user_id={user_id}")
         try:
-            # 验证会话所有权
-            session = self.db.query(DiagnosisSession).filter(
-                DiagnosisSession.id == session_id,
-                DiagnosisSession.user_id == user_id
-            ).first()
-            
-            if not session:
-                logger.warning(f"[LLMController.get_conversation_history] 会话不存在: session_id={session_id}, user_id={user_id}")
-                raise HTTPException(
-                    status_code=404,
-                    detail="会话不存在"
-                )
-            
-            # 使用仓库获取对话历史
-            history = self.llm_service.repository.get_conversation_history(session_id)
+            # 验证会话存在
+            await self._validate_session(session_id, user_id)
+            # 获取对话历史
+            history = await self.llm_service.get_conversation_history(session_id)
             logger.info(f"[LLMController.get_conversation_history] 获取到对话历史: session_id={session_id}, 消息数量={len(history)}")
             return history
         except HTTPException:
@@ -116,19 +109,22 @@ class LLMController:
         user_id: int
     ) -> Dict[str, Any]:
         """获取最新的 LLM 建议"""
-        session = self.db.query(DiagnosisSession).filter(
-            DiagnosisSession.id == session_id,
-            DiagnosisSession.user_id == user_id
-        ).first()
-        
-        if not session:
-            raise ValueError("Session not found")
-        
-        return {
-            "session_id": session.id,
-            "diagnosis_suggestion": session.diagnosis_suggestion,
-            "follow_up_questions": json.loads(session.follow_up_questions or "[]")
-        }
+        try:
+            logger.info(f"[LLMController.get_latest_suggestion] 获取最新建议: session_id={session_id}, user_id={user_id}")
+            # 验证会话存在
+            await self._validate_session(session_id, user_id)
+            # 获取最新建议
+            result = await self.llm_service.get_latest_suggestion(session_id)
+            logger.info(f"[LLMController.get_latest_suggestion] 获取最新建议成功: session_id={session_id}")
+            return result
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[LLMController.get_latest_suggestion] 获取最新建议失败: {str(e)}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"获取最新建议失败: {str(e)}"
+            )
 
     async def get_analysis_history(
         self,
@@ -137,53 +133,51 @@ class LLMController:
         limit: int = 10
     ) -> List[Dict[str, Any]]:
         """获取分析历史"""
-        sessions = self.db.query(DiagnosisSession).filter(
-            DiagnosisSession.user_id == user_id
-        ).order_by(
-            DiagnosisSession.created_at.desc()
-        ).offset(skip).limit(limit).all()
-        
-        return [
-            {
-                "id": session.id,
-                "created_at": session.created_at,
-                "analysis_progress": session.analysis_progress,
-                "diagnosis_suggestion": session.diagnosis_suggestion
-            }
-            for session in sessions
-        ]
+        try:
+            logger.info(f"[LLMController.get_analysis_history] 获取分析历史: user_id={user_id}, skip={skip}, limit={limit}")
+            result = await self.llm_service.get_analysis_history(user_id, skip, limit)
+            logger.info(f"[LLMController.get_analysis_history] 获取分析历史成功: user_id={user_id}")
+            return result
+        except Exception as e:
+            logger.error(f"[LLMController.get_analysis_history] 获取分析历史失败: {str(e)}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"获取分析历史失败: {str(e)}"
+            )
 
     async def get_display_summary(
         self,
         user_id: int
     ) -> Dict[str, Any]:
         """获取用于显示的摘要数据"""
-        total_sessions = self.db.query(DiagnosisSession).filter(
-            DiagnosisSession.user_id == user_id
-        ).count()
-        
-        completed_sessions = self.db.query(DiagnosisSession).filter(
-            DiagnosisSession.user_id == user_id,
-            DiagnosisSession.analysis_progress == 100
-        ).count()
-        
-        return {
-            "total_sessions": total_sessions,
-            "completed_sessions": completed_sessions,
-            "completion_rate": (completed_sessions / total_sessions * 100) if total_sessions > 0 else 0
-        }
+        try:
+            logger.info(f"[LLMController.get_display_summary] 获取显示摘要: user_id={user_id}")
+            result = await self.llm_service.get_display_summary(user_id)
+            logger.info(f"[LLMController.get_display_summary] 获取显示摘要成功: user_id={user_id}")
+            return result
+        except Exception as e:
+            logger.error(f"[LLMController.get_display_summary] 获取显示摘要失败: {str(e)}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"获取显示摘要失败: {str(e)}"
+            )
 
     async def get_realtime_data(
         self,
         user_id: int
     ) -> Dict[str, Any]:
         """获取实时监控数据"""
-        # 这里可以添加实时数据的获取逻辑
-        return {
-            "active_sessions": 0,
-            "processing_sessions": 0,
-            "completed_today": 0
-        }
+        try:
+            logger.info(f"[LLMController.get_realtime_data] 获取实时数据: user_id={user_id}")
+            result = await self.llm_service.get_realtime_data(user_id)
+            logger.info(f"[LLMController.get_realtime_data] 获取实时数据成功: user_id={user_id}")
+            return result
+        except Exception as e:
+            logger.error(f"[LLMController.get_realtime_data] 获取实时数据失败: {str(e)}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"获取实时数据失败: {str(e)}"
+            )
 
     async def save_conversation(
         self,
@@ -194,28 +188,17 @@ class LLMController:
     ) -> bool:
         """保存对话历史"""
         try:
-            session = self.db.query(DiagnosisSession).filter(
-                DiagnosisSession.id == session_id,
-                DiagnosisSession.user_id == user_id
-            ).first()
-            
-            if not session:
-                raise ValueError(f"找不到会话ID: {session_id}")
-            
-            # 获取现有对话历史
-            conversation_history = json.loads(session.conversation_history or "[]")
-            
-            # 添加用户消息和助手消息
-            conversation_history.append(user_message)
-            conversation_history.append(assistant_message)
-            
-            # 更新会话
-            session.conversation_history = json.dumps(conversation_history)
-            self.db.commit()
-            
-            return True
+            logger.info(f"[LLMController.save_conversation] 保存对话: session_id={session_id}, user_id={user_id}")
+            # 验证会话存在
+            await self._validate_session(session_id, user_id)
+            # 保存对话
+            result = await self.llm_service.save_conversation(session_id, user_message, assistant_message)
+            logger.info(f"[LLMController.save_conversation] 对话保存成功: session_id={session_id}")
+            return result
+        except HTTPException:
+            raise
         except Exception as e:
-            self.db.rollback()
+            logger.error(f"[LLMController.save_conversation] 保存对话历史失败: {str(e)}", exc_info=True)
             raise HTTPException(
                 status_code=500,
                 detail=f"保存对话历史失败: {str(e)}"
@@ -224,18 +207,40 @@ class LLMController:
     async def summarize_conversation(
         self,
         session_id: int,
-        user_id: int
+        user_id: int,
+        conversation: Optional[List[Dict]] = None
     ) -> Dict[str, Any]:
         """总结对话，生成诊断建议"""
-        logger.info(f"[LLMController.summarize_conversation] 开始总结对话: session_id={session_id}, user_id={user_id}")
+        logger.info(f"[LLMController.summarize_conversation] 开始总结对话: session_id={session_id}, user_id={user_id}, 是否使用前端对话: {conversation is not None}")
         try:
-            # 调用LLM服务总结对话
-            result = await self.llm_service.summarize_conversation(session_id, user_id)
+            # 验证会话存在
+            await self._validate_session(session_id, user_id)
+            
+            # 调用服务层总结对话
+            result = await self.llm_service.summarize_conversation(session_id, user_id, conversation)
             logger.info(f"[LLMController.summarize_conversation] 对话总结成功: session_id={session_id}")
             return result
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"[LLMController.summarize_conversation] 总结对话失败: {str(e)}", exc_info=True)
             raise HTTPException(
                 status_code=500,
                 detail=f"总结对话失败: {str(e)}"
-            ) 
+            )
+            
+    async def _validate_session(self, session_id: int, user_id: int) -> DiagnosisSession:
+        """验证会话是否存在且属于当前用户"""
+        session = self.db.query(DiagnosisSession).filter(
+            DiagnosisSession.id == session_id,
+            DiagnosisSession.user_id == user_id
+        ).first()
+        
+        if not session:
+            logger.warning(f"[LLMController._validate_session] 会话不存在或不属于当前用户: session_id={session_id}, user_id={user_id}")
+            raise HTTPException(
+                status_code=404,
+                detail="诊断会话不存在或不属于当前用户"
+            )
+        
+        return session 

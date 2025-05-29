@@ -9,6 +9,8 @@ from pathlib import Path
 warnings.filterwarnings("ignore")
 logger = logging.getLogger(__name__)
 
+MODEL_INSTANCE = None
+
 class AnalysisModel:
     def __init__(self, model_path):
         try:
@@ -72,19 +74,18 @@ class AnalysisModel:
         result = self.model_svm_loaded.predict(X)[0]
         return result
 
-# 创建模型实例
 def create_model() -> AnalysisModel:
     """
-    创建并返回模型实例
-    
+    创建并返回模型实例（全局只加载一次）
     Returns:
         AnalysisModel实例
     """
-    # 获取项目根目录
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.abspath(os.path.join(current_dir, '..', '..', '..'))
-    
-    # 构建模型文件路径
-    model_path = os.path.join(project_root, 'ml_models', 'trained', 'voice_models', 'svm_model.pkl')
-    
-    return AnalysisModel(model_path)
+    global MODEL_INSTANCE
+    if MODEL_INSTANCE is None:
+        # 获取项目根目录
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.abspath(os.path.join(current_dir, '..', '..', '..'))
+        # 构建模型文件路径
+        model_path = os.path.join(project_root, 'ml_models', 'trained', 'voice_models', 'svm_model.pkl')
+        MODEL_INSTANCE = AnalysisModel(model_path)
+    return MODEL_INSTANCE
