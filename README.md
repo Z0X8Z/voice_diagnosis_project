@@ -31,7 +31,7 @@
 
 1. 克隆项目
 ```bash
-git clone <项目地址>
+git clone git@github.com:Z0X8Z/voice_diagnosis_project.git
 cd <项目目录>
 ```
 
