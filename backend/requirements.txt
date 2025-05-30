@@ -80,5 +80,6 @@ typing_extensions==4.13.2
 tzdata==2025.2
 urllib3==2.4.0
 uvicorn==0.15.0
--e git+https://github.com/Z0X8Z/voice_diagnosis_project.git@51711fc4698761e706b80e19764711d4a73cddba#egg=voice_analysis_backend&subdirectory=backend
+# 注释掉从 GitHub 拉取代码的依赖，使用本地代码开发
+# -e git+https://github.com/Z0X8Z/voice_diagnosis_project.git@51711fc4698761e706b80e19764711d4a73cddba#egg=voice_analysis_backend&subdirectory=backend
 websockets==15.0.1
