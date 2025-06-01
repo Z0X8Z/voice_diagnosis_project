@@ -31,52 +31,73 @@
 
 1. 克隆项目
 ```bash
+git clone https://github.com/Z0X8Z/voice_diagnosis_project.git
+若网络速度慢可以使用ssh
 git clone git@github.com:Z0X8Z/voice_diagnosis_project.git
-cd <项目目录>
+cd voice_diagnosis_project
 ```
 
-2. 安装后端依赖
+2. 安装 Anaconda/Miniconda
+请确保本地已安装 [Anaconda](https://www.anaconda.com/products/distribution) 或 [Miniconda](https://docs.conda.io/en/latest/miniconda.html)。
+
+3. 创建并激活后端环境
 ```bash
-cd backend
-pip install -r requirements.txt
+conda create -n voice_diagnosis_env python=3.10 -y
+conda activate voice_diagnosis_env
 ```
 
-3. 安装前端依赖
+4. 安装后端依赖
+```bash
+pip install -r backend/requirements.txt
+pip install pyyaml==6.0.1 exceptiongroup tomli
+```
+> 如遇依赖冲突，可先单独安装 `pyyaml`、`exceptiongroup` 和 `tomli`，再安装主依赖。
+
+5. 安装前端依赖
 ```bash
 cd frontend
 npm install
 ```
 
-4. 配置环境变量
+6. 配置环境变量（可选）
 ```bash
-cd backend
+cd ../backend
 python scripts/setup_env.py
 ```
-按照提示输入配置信息，或直接使用默认值。
+按提示输入配置信息，或直接使用默认值。
 
-5. 初始化数据库
+7. 初始化数据库（如首次部署）
 ```bash
-cd backend
 python scripts/init_mysql_db.py
 ```
 
-## 运行项目
-
-1. 启动后端服务
+8. 启动后端服务
 ```bash
 cd backend
 uvicorn main:app --reload
 ```
+后端API文档地址：http://localhost:8000/docs
 
-2. 启动前端服务
+9. 启动前端服务
 ```bash
 cd frontend
-npm start
+npm run dev
 ```
+前端访问地址：http://localhost:3000
 
-3. 访问应用
-- 后端API文档：http://localhost:8000/docs
-- 前端应用：http://localhost:3000
+---
+
+## 常见问题与解决
+
+- **依赖安装失败**：请确保已激活`voice_diagnosis_env`环境，并使用`pip`安装依赖。
+- **缺少依赖**：如遇`ModuleNotFoundError`，请根据报错信息手动`pip install`缺失的包。
+- **端口冲突**：如8000或3000端口被占用，请修改启动命令或释放端口。
+
+---
+
+如需进一步自动化，可考虑编写一键安装脚本（如`install.sh`），进一步提升易用性。
+
+如有问题请查阅项目README或联系维护者。
 
 ## 项目结构
 
@@ -181,3 +202,4 @@ npm run build
 ## 联系方式
 
 如有问题或建议，请提交 Issue 或联系项目维护者。
+
