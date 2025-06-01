@@ -32,8 +32,6 @@
 1. 克隆项目
 ```bash
 git clone https://github.com/Z0X8Z/voice_diagnosis_project.git
-若网络速度慢可以使用ssh
-git clone git@github.com:Z0X8Z/voice_diagnosis_project.git
 cd voice_diagnosis_project
 ```
 
@@ -46,12 +44,12 @@ conda create -n voice_diagnosis_env python=3.10 -y
 conda activate voice_diagnosis_env
 ```
 
-4. 安装后端依赖
+4. 安装后端依赖（推荐方式）
 ```bash
 pip install -r backend/requirements.txt
-pip install pyyaml==6.0.1 exceptiongroup tomli
 ```
-> 如遇依赖冲突，可先单独安装 `pyyaml`、`exceptiongroup` 和 `tomli`，再安装主依赖。
+
+> **注意：** 绝大多数情况下，直接执行上述命令即可自动安装所有主依赖和二级依赖。
 
 5. 安装前端依赖
 ```bash
@@ -88,6 +86,15 @@ npm run dev
 ---
 
 ## 常见问题与解决
+
+- **依赖安装失败/构建报错（如 PyYAML、exceptiongroup 等）**：
+  某些环境下，个别依赖（如 PyYAML）可能因兼容性或构建问题导致安装失败。此时可采用如下手动安装方案：
+  ```bash
+  pip install pyyaml==6.0.1
+  pip install -r backend/requirements.txt --no-deps
+  pip install exceptiongroup tomli
+  ```
+  这样可规避部分依赖冲突或构建失败问题。
 
 - **依赖安装失败**：请确保已激活`voice_diagnosis_env`环境，并使用`pip`安装依赖。
 - **缺少依赖**：如遇`ModuleNotFoundError`，请根据报错信息手动`pip install`缺失的包。
