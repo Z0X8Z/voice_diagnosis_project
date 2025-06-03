@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.v1.endpoints import auth, users, diagnosis, llm, dashboard
+from app.api.v1.endpoints import auth, users, diagnosis, llm, dashboard, microphone_test
 from app.db.session import engine, get_db
 from app.db.models import Base
 import uvicorn
@@ -69,6 +69,7 @@ app.include_router(users.router, prefix=f"{settings.API_V1_STR}/users", tags=["�
 app.include_router(diagnosis.router, prefix=f"{settings.API_V1_STR}/diagnosis", tags=["诊断检测"])
 app.include_router(llm.router, prefix=f"{settings.API_V1_STR}/llm", tags=["大模型调用"])
 app.include_router(dashboard.router, prefix=f"{settings.API_V1_STR}/dashboard", tags=["仪表盘"])
+app.include_router(microphone_test.router, prefix=f"{settings.API_V1_STR}/microphone-test", tags=["麦克风测试"])
 
 @app.get("/")
 def read_root():

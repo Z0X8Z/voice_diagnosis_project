@@ -37,6 +37,12 @@ const router = createRouter({
       name: 'Settings',
       component: () => import('../views/Settings.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/microphone-test',
+      name: 'MicrophoneTest',
+      component: () => import('../views/MicrophoneTest.vue'),
+      meta: { requiresAuth: true }
     }
   ]
 })

@@ -18,18 +18,126 @@
               <li>正对麦克风</li>
               <li>保持安静环境</li>
             </ul>
+            <div class="mic-test-tip">
+              <el-icon><Warning /></el-icon>
+              <span>首次使用建议先进行</span>
+              <el-button text type="primary" @click="goToMicTest" class="mic-test-link">
+                麦克风质量测试
+              </el-button>
+            </div>
           </div>
+          
+          <!-- 录音区域 -->
           <canvas ref="waveformCanvas" class="waveform-canvas"></canvas>
           <div class="volume-feedback" :class="volumeLevelClass">{{ volumeFeedback }}</div>
+          
+          <!-- 录音按钮 -->
           <button
             class="record-btn"
-            :class="{ recording: isRecording }"
+            :class="{ 
+              recording: isRecording, 
+              success: lastAudioQuality && lastAudioQuality.is_acceptable,
+              checking: isCheckingQuality 
+            }"
             @click="toggleRecording"
+            :disabled="isCheckingQuality || isUploading"
           >
-            <el-icon><Microphone /></el-icon>
+            <el-icon v-if="isCheckingQuality"><Loading /></el-icon>
+            <el-icon v-else-if="lastAudioQuality && lastAudioQuality.is_acceptable"><Check /></el-icon>
+            <el-icon v-else><Microphone /></el-icon>
           </button>
+          
           <div class="record-tip">
-            {{ isRecording ? '录音中...点击停止' : '点击录音' }}
+            <span v-if="isRecording">录音中...点击停止</span>
+            <span v-else-if="isCheckingQuality">正在检测音频质量...</span>
+            <span v-else-if="isUploading">正在上传分析...</span>
+            <span v-else-if="lastAudioQuality && lastAudioQuality.is_acceptable">音频质量良好！点击上传分析</span>
+            <span v-else-if="recordAttempts > 0">音频质量需要改善，请重新录音</span>
+            <span v-else>点击录音</span>
+          </div>
+
+          <!-- 录音尝试次数显示 -->
+          <div v-if="recordAttempts > 0" class="attempt-info">
+            <el-tag type="info" size="small">已录音 {{ recordAttempts }} 次</el-tag>
+          </div>
+
+          <!-- 音频质量反馈 -->
+          <div v-if="lastAudioQuality" class="audio-quality-feedback">
+            <div class="quality-header">
+              <el-progress
+                type="circle"
+                :percentage="lastAudioQuality.quality_score"
+                :color="getQualityColor(lastAudioQuality.quality_score)"
+                :width="60"
+              />
+              <div class="quality-text">
+                <span class="quality-score">{{ lastAudioQuality.quality_score }}分</span>
+                <span class="quality-level" :class="getQualityClass(lastAudioQuality.quality_level)">
+                  {{ lastAudioQuality.quality_level }}
+                </span>
+              </div>
+            </div>
+
+            <!-- 简化的反馈信息 -->
+            <div class="simple-feedback">
+              <div class="feedback-row">
+                <span class="label">🔊 音量:</span>
+                <span>{{ lastAudioQuality.detailed_feedback.volume_feedback }}</span>
+              </div>
+              <div class="feedback-row">
+                <span class="label">⏱️ 时长:</span>
+                <span>{{ lastAudioQuality.detailed_feedback.duration_feedback }}</span>
+              </div>
+              <div class="feedback-row">
+                <span class="label">🎵 质量:</span>
+                <span>{{ lastAudioQuality.detailed_feedback.quality_feedback }}</span>
+              </div>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="quality-actions">
+              <el-button 
+                v-if="!lastAudioQuality.is_acceptable" 
+                type="warning" 
+                size="small"
+                @click="retryRecording"
+                :disabled="isRecording || isCheckingQuality"
+              >
+                重新录音
+              </el-button>
+              
+              <el-button 
+                v-if="lastAudioQuality.is_acceptable" 
+                type="primary" 
+                size="small"
+                @click="proceedToAnalysis"
+                :loading="isUploading"
+              >
+                {{ isUploading ? '正在分析...' : '开始分析' }}
+              </el-button>
+            </div>
+
+            <!-- 问题和建议（只在质量不达标时显示） -->
+            <div v-if="!lastAudioQuality.is_acceptable && showDetailedFeedback" class="detailed-issues">
+              <div v-if="lastAudioQuality.issues.length > 0" class="issues">
+                <h5>需要改善：</h5>
+                <ul>
+                  <li v-for="issue in lastAudioQuality.issues" :key="issue">{{ issue }}</li>
+                </ul>
+              </div>
+              <div class="suggestions">
+                <h5>建议：</h5>
+                <ul>
+                  <li v-for="suggestion in lastAudioQuality.suggestions" :key="suggestion">{{ suggestion }}</li>
+                </ul>
+              </div>
+            </div>
+
+            <div v-if="!lastAudioQuality.is_acceptable" class="toggle-details">
+              <el-button text size="small" @click="showDetailedFeedback = !showDetailedFeedback">
+                {{ showDetailedFeedback ? '收起详情' : '查看详情' }}
+              </el-button>
+            </div>
           </div>
         </div>
 
@@ -64,7 +172,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Microphone } from '@element-plus/icons-vue'
+import { Microphone, Warning, Loading, Check } from '@element-plus/icons-vue'
 import { useUserStore } from '../stores/user'
 import axios from 'axios'
 
@@ -73,6 +181,8 @@ const router = useRouter()
 const uploadStatus = ref(null)
 const analysisResult = ref(null)
 const isRecording = ref(false)
+const isCheckingQuality = ref(false)
+const isUploading = ref(false)
 let mediaRecorder = null
 let audioChunks = []
 let audioContext = null
@@ -83,6 +193,10 @@ const waveformCanvas = ref(null)
 const volumeFeedback = ref('音量正常')
 const volumeLevelClass = ref('normal')
 const userStore = useUserStore()
+const recordAttempts = ref(0)
+const lastAudioQuality = ref(null)
+const showDetailedFeedback = ref(false)
+const acceptableAudioBlob = ref(null)
 
 const drawWaveform = () => {
   if (!analyser || !waveformCanvas.value) return
@@ -144,9 +258,9 @@ const toggleRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          noiseSuppression: true,
-          echoCancellation: true,
-          autoGainControl: true
+          noiseSuppression: false, // 测试时不要降噪
+          echoCancellation: false,
+          autoGainControl: false
         }
       })
       mediaRecorder = new window.MediaRecorder(stream)
@@ -156,10 +270,11 @@ const toggleRecording = async () => {
       }
       mediaRecorder.onstop = () => {
         stopVisualizer()
-        uploadAudio()
+        checkAudioQuality() // 录音结束后检测质量
       }
       mediaRecorder.start()
       isRecording.value = true
+      recordAttempts.value++
       startVisualizer(stream)
     } catch (err) {
       ElMessage.error('无法获取麦克风权限')
@@ -172,17 +287,83 @@ const toggleRecording = async () => {
   }
 }
 
-const uploadAudio = async () => {
+const checkAudioQuality = async () => {
+  try {
+    isCheckingQuality.value = true
+    
+    // 创建音频文件
+    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
+    
+    const formData = new FormData()
+    formData.append('breath_file', audioBlob, `voice_attempt_${recordAttempts.value}.webm`)
+    
+    const response = await fetch('/api/v1/microphone-test/check-breath-quality', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${userStore.token}`
+      },
+      body: formData
+    })
+    
+    if (!response.ok) {
+      throw new Error('质量检测请求失败')
+    }
+    
+    const result = await response.json()
+    lastAudioQuality.value = result.quality_result
+    
+    if (lastAudioQuality.value.is_acceptable) {
+      ElMessage.success('录音质量良好！可以开始分析')
+      // 保存高质量音频供后续分析使用
+      acceptableAudioBlob.value = audioBlob
+    } else {
+      ElMessage.warning(`第${recordAttempts.value}次录音质量需要改善，请查看建议后重新录音`)
+      showDetailedFeedback.value = true // 自动展开详细反馈
+    }
+    
+  } catch (error) {
+    ElMessage.error(`质量检测失败: ${error.message}`)
+    lastAudioQuality.value = null
+  } finally {
+    isCheckingQuality.value = false
+  }
+}
+
+const retryRecording = () => {
+  // 重置状态，准备重新录音
+  lastAudioQuality.value = null
+  showDetailedFeedback.value = false
+  volumeFeedback.value = '音量正常'
+  volumeLevelClass.value = 'normal'
+  uploadStatus.value = null
+  analysisResult.value = null
+}
+
+const proceedToAnalysis = async () => {
+  if (!acceptableAudioBlob.value) {
+    ElMessage.error('没有可用的高质量音频')
+    return
+  }
+  
+  // 使用高质量音频进行分析
+  await uploadAudio(acceptableAudioBlob.value)
+}
+
+const uploadAudio = async (audioBlob = null) => {
   // 上传新语音前，清除仪表盘本地存储
   localStorage.removeItem('voice_analysis_conversation');
-  const audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
+  
+  // 如果没有提供audioBlob，使用最新的录音（向后兼容）
+  const blobToUpload = audioBlob || new Blob(audioChunks, { type: 'audio/webm' })
+  
   const formData = new FormData()
   const timestamp = new Date().getTime()
-  formData.append('file', audioBlob, `voice_${timestamp}.webm`)
+  formData.append('file', blobToUpload, `voice_${timestamp}.webm`)
+  
   // 存储首轮分析请求内容到 localStorage
   localStorage.setItem('initialLLMMessage', JSON.stringify({
     role: 'user',
-    content: '请分析我的语音健康' // 你可以根据实际业务动态生成
+    content: '请分析我的语音健康'
   }))
   
   // 检查token是否存在
@@ -196,8 +377,10 @@ const uploadAudio = async () => {
   let triedRefresh = false
   while (true) {
     try {
+      isUploading.value = true
       uploadStatus.value = { type: 'info', message: '正在上传录音...' }
-      console.log('使用的token:', userStore.token) // 调试信息
+      console.log('使用的token:', userStore.token)
+      
       const response = await fetch('/api/v1/diagnosis/upload', {
         method: 'POST',
         headers: {
@@ -205,6 +388,7 @@ const uploadAudio = async () => {
         },
         body: formData
       })
+      
       if (response.status === 401 && !triedRefresh) {
         // token过期，尝试刷新
         try {
@@ -217,11 +401,13 @@ const uploadAudio = async () => {
           return
         }
       }
+      
       if (!response.ok) {
         const errorData = await response.json()
         console.error('上传错误详情:', errorData)
         throw new Error(errorData.detail || '上传失败')
       }
+      
       const result = await response.json()
       uploadStatus.value = { type: 'success', message: '上传成功' }
       analysisResult.value = result.result
@@ -251,8 +437,25 @@ const uploadAudio = async () => {
       uploadStatus.value = { type: 'error', message: `上传失败: ${error.message}` }
       analysisResult.value = null
       break
+    } finally {
+      isUploading.value = false
     }
   }
+}
+
+const goToMicTest = () => {
+  router.push('/microphone-test')
+}
+
+const getQualityColor = (score) => {
+  if (score >= 80) return '#409EFF'
+  if (score >= 60) return '#67C23A'
+  if (score >= 40) return '#E6A23C'
+  return '#F56C6C'
+}
+
+const getQualityClass = (level) => {
+  return level.toLowerCase().replace(' ', '-')
 }
 
 onMounted(() => {
@@ -386,6 +589,20 @@ onBeforeUnmount(() => {
   100% { box-shadow: 0 0 0 0 #e5393500; }
 }
 
+.record-btn.success {
+  background: linear-gradient(135deg, #67c23a 60%, #95d475 100%);
+}
+
+.record-btn.checking {
+  background: linear-gradient(135deg, #409eff 60%, #79bbff 100%);
+  cursor: not-allowed;
+}
+
+.record-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 .record-tip {
   font-size: 15px;
   color: #2196f3;
@@ -409,6 +626,138 @@ onBeforeUnmount(() => {
   color: #2196f3;
   font-size: 18px;
   margin-bottom: 12px;
+}
+
+.mic-test-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 15px;
+  color: #666;
+}
+
+.mic-test-link {
+  padding: 0;
+  background: none;
+  border: none;
+  color: #2196f3;
+  font: inherit;
+  cursor: pointer;
+  outline: inherit;
+}
+
+.audio-quality-feedback {
+  margin-top: 20px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(179, 229, 252, 0.2);
+  border: 1px solid #e3f2fd;
+}
+
+.quality-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.quality-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.quality-score {
+  font-size: 20px;
+  font-weight: bold;
+  color: #2196f3;
+}
+
+.quality-level {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.quality-level.优秀 { color: #67c23a; }
+.quality-level.良好 { color: #409eff; }
+.quality-level.一般 { color: #e6a23c; }
+.quality-level.较差 { color: #f56c6c; }
+
+.simple-feedback {
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+}
+
+.feedback-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.feedback-row:last-child {
+  margin-bottom: 0;
+}
+
+.feedback-row .label {
+  font-weight: bold;
+  color: #2196f3;
+  min-width: 60px;
+  margin-right: 8px;
+}
+
+.quality-actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.detailed-issues {
+  margin-top: 16px;
+  padding: 12px;
+  background: #fff;
+  border-radius: 8px;
+  border-left: 4px solid #f56c6c;
+}
+
+.detailed-issues h5 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #f56c6c;
+}
+
+.detailed-issues ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.detailed-issues li {
+  margin: 4px 0;
+  font-size: 13px;
+  color: #666;
+}
+
+.issues {
+  margin-bottom: 12px;
+}
+
+.suggestions h5 {
+  color: #2196f3 !important;
+}
+
+.toggle-details {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.attempt-info {
+  margin-top: 8px;
+  text-align: center;
 }
 
 @media (max-width: 600px) {

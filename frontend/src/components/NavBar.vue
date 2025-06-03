@@ -12,6 +12,7 @@
         router
       >
         <el-menu-item index="/home">主页</el-menu-item>
+        <el-menu-item index="/microphone-test">麦克风测试</el-menu-item>
         <el-menu-item index="/dashboard">仪表盘</el-menu-item>
       </el-menu>
     </nav>
