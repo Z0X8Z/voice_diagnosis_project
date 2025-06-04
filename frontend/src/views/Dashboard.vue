@@ -1,5 +1,16 @@
 <template>
   <div class="dashboard-container">
+    <!-- 模式状态指示器 -->
+    <div class="mode-indicator">
+      <el-alert
+        :title="modeDescription.title"
+        :description="modeDescription.description"
+        :type="modeDescription.color"
+        show-icon
+        :closable="false"
+      />
+    </div>
+    
     <div class="main-content">
       <div class="dashboard-left">
         <!-- 健康结论 -->
@@ -18,8 +29,8 @@
             </div>
           </el-card>
         </div>
-        <!-- 历史趋势分析 -->
-        <el-card class="trend-card" shadow="hover">
+        <!-- 历史趋势分析 - 仅在主动分析模式显示 -->
+        <el-card v-if="permissions.canViewHistoricalData" class="trend-card" shadow="hover">
           <div class="trend-header">
             <h2>历史趋势分析</h2>
             <el-select v-model="trendFilter" placeholder="选择特征" style="width: 140px;">
@@ -84,10 +95,26 @@
             />
           </div>
         </el-card>
+        
+        <!-- 只读模式下的快捷操作 -->
+        <el-card v-if="isReadOnlyMode" class="quick-actions-card" shadow="hover">
+          <div class="quick-actions-header">
+            <h2>快捷操作</h2>
+          </div>
+          <div class="quick-actions-content">
+            <el-button type="primary" size="large" @click="startNewAnalysis" style="width: 100%; margin-bottom: 12px;">
+              <el-icon><Position /></el-icon>
+              开始新的语音分析
+            </el-button>
+            <el-button type="default" size="default" @click="goToSettings" style="width: 100%;">
+              查看历史记录
+            </el-button>
+          </div>
+        </el-card>
       </div>
       <div class="dashboard-right">
-        <!-- 声学特征分析 -->
-        <el-card v-if="isActiveSession" class="feature-card" shadow="hover">
+        <!-- 声学特征分析 - 仅在主动分析模式显示 -->
+        <el-card v-if="permissions.canViewAcousticFeatures" class="feature-card" shadow="hover">
           <div class="feature-header">
             <h2>声学特征分析</h2>
             <el-button type="primary" @click="showFeatureDetail = true">查看详细特征</el-button>
@@ -126,15 +153,15 @@
         </el-card>
         <!-- AI诊断与对话 -->
         <transition name="fade">
-          <el-card class="ai-diagnosis-card" shadow="hover" :key="isActiveSession ? 'chat' : 'readonly'">
+          <el-card class="ai-diagnosis-card" shadow="hover" :key="isInteractiveMode ? 'chat' : 'readonly'">
             <div class="diagnosis-header">
               <h2>AI诊断建议</h2>
               <div class="diagnosis-actions">
-                <!-- <el-button v-if="isActiveSession" type="success" size="small" @click="exportReport">导出报告</el-button> -->
+                <!-- <el-button v-if="isInteractiveMode" type="success" size="small" @click="exportReport">导出报告</el-button> -->
               </div>
             </div>
             <div class="chat-container">
-              <div v-if="isActiveSession">
+              <div v-if="permissions.canChat">
                 <!-- 可对话模式 -->
                 <div class="chat-title">
                   <h3>AI 助手对话</h3>
@@ -164,7 +191,7 @@
                     </div>
                   </div>
                 </div>
-                <div class="chat-input">
+                <div class="chat-input" v-if="permissions.canSendMessage">
                   <el-input
                     v-model="userMessage"
                     placeholder="请输入您的问题..."
@@ -179,7 +206,7 @@
                     </template>
                   </el-input>
                 </div>
-                <div class="chat-summary-actions">
+                <div class="chat-summary-actions" v-if="permissions.canCompleteConversation">
                   <el-button type="success" :loading="loadingSummary" @click="handleFinishConversation">
                     完成对话
                   </el-button>
@@ -189,7 +216,7 @@
                 <!-- 只读模式 -->
                 <div class="chat-title">
                   <h3>AI 诊断建议</h3>
-                  <div class="chat-title-actions">
+                  <div class="chat-title-actions" v-if="permissions.canRefreshSuggestion">
                     <el-button size="small" type="primary" @click="refreshLatestSuggestion" :loading="loadingLatestSuggestion">
                       <el-icon><Refresh /></el-icon>
                       刷新
@@ -233,7 +260,11 @@
                   </div>
                   <div v-else class="message assistant">
                     <div class="message-content">
-                      <span>暂无AI诊断建议</span>
+                      <el-empty description="暂无AI诊断建议" :image-size="80">
+                        <el-button type="primary" @click="startNewAnalysis">
+                          开始新的语音分析
+                        </el-button>
+                      </el-empty>
                     </div>
                   </div>
                 </div>
@@ -244,8 +275,9 @@
       </div>
     </div>
 
+    <!-- 声学特征详情对话框 - 仅在主动分析模式可用 -->
     <el-dialog 
-      v-if="isActiveSession"
+      v-if="permissions.canViewAcousticFeatures"
       v-model="showFeatureDetail" 
       title="全部声学特征" 
       width="80%" 
@@ -392,6 +424,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Position, QuestionFilled, Refresh } from '@element-plus/icons-vue'
 import { useUserStore } from '../stores/user'
 import { useApi } from '../composables/useApi'
+import { useDashboardMode } from '../composables/useDashboardMode'
 import LineChart from '../components/LineChart.vue'
 import { useWebSocket } from '../composables/useWebSocket'
 
@@ -402,6 +435,18 @@ const router = useRouter()
 const userStore = useUserStore()
 const api = useApi()
 const { isConnected } = useWebSocket()
+
+// 使用仪表盘模式管理
+const {
+  currentMode,
+  isInteractiveMode,
+  isReadOnlyMode,
+  permissions,
+  activateInteractiveMode,
+  completeConversation,
+  getModeDescription,
+  refreshMode
+} = useDashboardMode()
 
 const loading = ref(false)
 const currentPage = ref(1)
@@ -465,7 +510,23 @@ const initialLLMMessage = ref(null)
 const CONVERSATION_STORAGE_KEY = 'voice_analysis_conversation';
 const INITIAL_MESSAGE_STORAGE_KEY = 'initialLLMMessage';
 
-const storageVersion = ref(0)
+// 计算属性
+const modeDescription = computed(() => getModeDescription())
+
+// 兼容原有逻辑的计算属性
+const isActiveSession = computed(() => isInteractiveMode.value)
+
+const trendFilter = ref('rms_values')
+const trendFilterLabel = computed(() => {
+  if (trendFilter.value === 'rms_values') return '音量 (RMS)'
+  if (trendFilter.value === 'zcr_values') return '过零率 (ZCR)'
+  if (trendFilter.value === 'confidence_values') return '置信度'
+  return ''
+})
+
+// 声学特征相关
+const showFeatureDetail = ref(false)
+const showCompletionAlert = ref(false)
 
 // 获取最新分析结果
 const fetchLatestAnalysis = async () => {
@@ -476,8 +537,8 @@ const fetchLatestAnalysis = async () => {
   } catch (error) {
     console.error('获取最新分析结果失败:', error)
     ElMessage.error('获取最新分析结果失败')
-      }
-    }
+  }
+}
 
 // 获取历史数据
 const fetchHistoricalData = async () => {
@@ -520,6 +581,15 @@ const getSessionId = () => {
   return null
 }
 
+// 新增方法
+const startNewAnalysis = () => {
+  router.push('/home')
+}
+
+const goToSettings = () => {
+  router.push('/settings')
+}
+
 // 修改onMounted钩子，添加从localStorage恢复对话状态的逻辑
 onMounted(() => {
   console.log('Dashboard 组件挂载', window.location.href, Date.now())
@@ -557,7 +627,7 @@ onMounted(() => {
     // 新增：写入localStorage，激活对话模式
     localStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(conversationHistory.value));
     console.log('已写入初始对话到localStorage:', localStorage.getItem(CONVERSATION_STORAGE_KEY))
-    storageVersion.value++ // 确保isActiveSession立即变为true
+    refreshMode() // 确保isActiveSession立即变为true
   }
   
   // diagnosisSuggestion 有内容时自动同步到对话区
@@ -620,9 +690,6 @@ onMounted(() => {
   } else {
     console.warn('未获取到用户ID，无法建立WebSocket连接')
   }
-
-  // 添加控制提示显示的变量和逻辑
-  const showCompletionAlert = ref(true);
 
   // 监听模式切换，进入只读模式时显示提示并设置定时器
   watch(isActiveSession, (val, oldVal) => {
@@ -850,19 +917,11 @@ const handleFinishConversation = async () => {
         content: '[最终诊断建议] ' + diagnosisSuggestion.value
       })
     }
-    // 只清除localStorage，不清空页面聊天框
-    localStorage.removeItem(CONVERSATION_STORAGE_KEY)
-    console.log('已清除localStorage[voice_analysis_conversation]，当前值：', localStorage.getItem(CONVERSATION_STORAGE_KEY))
-    storageVersion.value++ // 触发isActiveSession重新计算
-    // 移除URL中的fromUpload参数，防止刷新后仍为对话模式
-//    if (route.query.fromUpload) {
-//      const newQuery = { ...route.query }
-//      delete newQuery.fromUpload
-//      console.log('准备移除fromUpload参数并刷新页面，新query:', newQuery)
-//      router.replace({ query: newQuery })
-//    }
-    // conversationHistory.value = [] // 注释掉自动清空
-    console.log('对话已完成，已清除本地存储')
+    
+    // 使用新的完成对话方法切换到只读模式
+    completeConversation()
+    
+    console.log('对话已完成，已切换到只读模式')
     refreshHistory()
     await nextTick()
     scrollToBottom()
@@ -939,113 +998,6 @@ onBeforeUnmount(() => {
 })
 
 const history = ref([])
-
-const showFeatureDetail = ref(false)
-const trendFilter = ref('rms_values')
-const trendFilterLabel = computed(() => {
-  if (trendFilter.value === 'rms_values') return '音量 (RMS)'
-  if (trendFilter.value === 'zcr_values') return '过零率 (ZCR)'
-  if (trendFilter.value === 'confidence_values') return '置信度'
-  return ''
-})
-
-function goToSettings() {
-  router.push('/settings')
-}
-
-function renderMarkdown(content) {
-  if (!content) return ''
-  return marked.parse(content)
-}
-
-// 添加表格数据计算属性
-const mfccTableData = computed(() => {
-  if (!latestAnalysis.value || !latestAnalysis.value.metrics) return [];
-  
-  return Array.from({length: 13}, (_, i) => {
-    const index = i + 1;
-    const key = `mfcc_${index}`;
-    const value = latestAnalysis.value.metrics[key];
-    
-    return {
-      name: `MFCC${index}`,
-      value: value !== undefined && value !== null ? value.toFixed(4) : '—',
-      description: index === 1 ? '表示语音的总体能量' : `第${index}维梅尔频率倒谱系数`
-    };
-  });
-});
-
-const chromaTableData = computed(() => {
-  if (!latestAnalysis.value || !latestAnalysis.value.metrics) return [];
-  
-  return Array.from({length: 12}, (_, i) => {
-    const index = i + 1;
-    const key = `chroma_${index}`;
-    const value = latestAnalysis.value.metrics[key];
-    
-    return {
-      name: `Chroma${index}`,
-      value: value !== undefined && value !== null ? value.toFixed(4) : '—',
-      description: `第${index}个色度特征，对应音高特征`
-    };
-  });
-});
-
-// 添加辅助函数，获取MFCC和色度特征值
-const getMfccValues = () => {
-  if (!latestAnalysis.value || !latestAnalysis.value.metrics) return Array(13).fill(null);
-  return Array.from({length: 13}, (_, i) => latestAnalysis.value.metrics[`mfcc_${i+1}`]);
-};
-
-const getChromaValues = () => {
-  if (!latestAnalysis.value || !latestAnalysis.value.metrics) return Array(12).fill(null);
-  return Array.from({length: 12}, (_, i) => latestAnalysis.value.metrics[`chroma_${i+1}`]);
-};
-
-// 添加对话框打开事件处理
-const handleFeatureDialogOpen = () => {
-  // 对话框打开时，等待DOM更新后再初始化图表
-  nextTick(() => {
-    console.log('特征详情对话框已打开，准备初始化图表')
-  })
-}
-
-// 添加趋势描述和Y轴标签函数
-const getTrendDescription = () => {
-  if (trendFilter.value === 'rms_values') {
-    return '音量(RMS)反映了声音的能量大小，可用于评估声音的响度变化。';
-  } else if (trendFilter.value === 'zcr_values') {
-    return '过零率(ZCR)表示信号穿过零点的频率，与声音的频率特性相关，可用于区分浊音和清音。';
-  } else if (trendFilter.value === 'confidence_values') {
-    return '置信度反映了模型对预测结果的确信程度，越高表示预测越可靠。';
-  }
-  return '';
-};
-
-const getTrendYAxisLabel = () => {
-  if (trendFilter.value === 'rms_values') {
-    return '音量值';
-  } else if (trendFilter.value === 'zcr_values') {
-    return '过零率值';
-  } else if (trendFilter.value === 'confidence_values') {
-    return '置信度 (0-1)';
-  }
-  return '';
-};
-
-// 增加模式判断：是否有未完成的对话
-const isActiveSession = computed(() => {
-  storageVersion.value // 依赖此变量，确保响应式
-  try {
-    const history = localStorage.getItem(CONVERSATION_STORAGE_KEY)
-    if (history && JSON.parse(history).length > 0) {
-      return true
-    }
-  } catch {
-    // 解析错误，忽略
-  }
-  return false
-})
 
 // 只读模式下的最新诊断建议
 const latestSessionSuggestion = ref({
@@ -1127,12 +1079,100 @@ const renderedDiagnosisSuggestion = computed(() => {
   }
   return ''
 })
+
+// 添加表格数据计算属性
+const mfccTableData = computed(() => {
+  if (!latestAnalysis.value || !latestAnalysis.value.metrics) return [];
+  
+  return Array.from({length: 13}, (_, i) => {
+    const index = i + 1;
+    const key = `mfcc_${index}`;
+    const value = latestAnalysis.value.metrics[key];
+    
+    return {
+      name: `MFCC${index}`,
+      value: value !== undefined && value !== null ? value.toFixed(4) : '—',
+      description: index === 1 ? '表示语音的总体能量' : `第${index}维梅尔频率倒谱系数`
+    };
+  });
+});
+
+const chromaTableData = computed(() => {
+  if (!latestAnalysis.value || !latestAnalysis.value.metrics) return [];
+  
+  return Array.from({length: 12}, (_, i) => {
+    const index = i + 1;
+    const key = `chroma_${index}`;
+    const value = latestAnalysis.value.metrics[key];
+    
+    return {
+      name: `Chroma${index}`,
+      value: value !== undefined && value !== null ? value.toFixed(4) : '—',
+      description: `第${index}个色度特征，对应音高特征`
+    };
+  });
+});
+
+// 添加辅助函数，获取MFCC和色度特征值
+const getMfccValues = () => {
+  if (!latestAnalysis.value || !latestAnalysis.value.metrics) return Array(13).fill(null);
+  return Array.from({length: 13}, (_, i) => latestAnalysis.value.metrics[`mfcc_${i+1}`]);
+};
+
+const getChromaValues = () => {
+  if (!latestAnalysis.value || !latestAnalysis.value.metrics) return Array(12).fill(null);
+  return Array.from({length: 12}, (_, i) => latestAnalysis.value.metrics[`chroma_${i+1}`]);
+};
+
+// 添加对话框打开事件处理
+const handleFeatureDialogOpen = () => {
+  // 对话框打开时，等待DOM更新后再初始化图表
+  nextTick(() => {
+    console.log('特征详情对话框已打开，准备初始化图表')
+  })
+}
+
+// 添加趋势描述和Y轴标签函数
+const getTrendDescription = () => {
+  if (trendFilter.value === 'rms_values') {
+    return '音量(RMS)反映了声音的能量大小，可用于评估声音的响度变化。';
+  } else if (trendFilter.value === 'zcr_values') {
+    return '过零率(ZCR)表示信号穿过零点的频率，与声音的频率特性相关，可用于区分浊音和清音。';
+  } else if (trendFilter.value === 'confidence_values') {
+    return '置信度反映了模型对预测结果的确信程度，越高表示预测越可靠。';
+  }
+  return '';
+};
+
+const getTrendYAxisLabel = () => {
+  if (trendFilter.value === 'rms_values') {
+    return '音量值';
+  } else if (trendFilter.value === 'zcr_values') {
+    return '过零率值';
+  } else if (trendFilter.value === 'confidence_values') {
+    return '置信度 (0-1)';
+  }
+  return '';
+};
+
+// 工具函数
+const renderMarkdown = (content) => {
+  if (!content) return ''
+  return marked.parse(content)
+}
 </script>
 
 <style scoped>
 .dashboard-container {
   min-height: 100vh;
   background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%);
+}
+
+/* 模式指示器样式 */
+.mode-indicator {
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 .main-content {
@@ -1188,6 +1228,34 @@ const renderedDiagnosisSuggestion = computed(() => {
   max-width: 420px;
   min-height: 420px;
   box-shadow: 0 4px 24px #b3e5fc55;
+}
+
+/* 快捷操作卡片样式 */
+.quick-actions-card {
+  background-color: #f8f9fa;
+  border-radius: 18px;
+  width: 420px;
+  min-width: 420px;
+  max-width: 420px;
+  min-height: 160px;
+  box-shadow: 0 4px 24px #b3e5fc55;
+}
+
+.quick-actions-header {
+  margin-bottom: 16px;
+}
+
+.quick-actions-header h2 {
+  color: #1976d2;
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.quick-actions-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .feature-card {
