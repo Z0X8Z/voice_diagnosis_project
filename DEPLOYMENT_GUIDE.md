@@ -66,6 +66,22 @@ conda --version
 ```
 
 ### 2.3 创建项目专用Python环境
+
+**方法1：使用environment.yml（推荐）**
+```bash
+# 使用预配置的环境文件一键创建环境
+conda env create -f environment.yml
+
+# 激活环境
+conda activate voice_diagnosis_env
+
+# 验证环境
+which python  # macOS/Linux
+where python  # Windows
+# 应该显示包含voice_diagnosis_env的路径
+```
+
+**方法2：手动创建环境**
 ```bash
 # 创建新的conda环境
 conda create -n voice_diagnosis_env python=3.10 -y

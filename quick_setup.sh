@@ -46,12 +46,68 @@ if conda env list | grep -q "voice_diagnosis_env"; then
         conda env remove -n voice_diagnosis_env -y
     else
         echo "📝 使用现有环境"
+        source $(conda info --base)/etc/profile.d/conda.sh
+        conda activate voice_diagnosis_env
+        cd backend
+        pip install -r requirements.txt
+        echo "✅ 后端依赖安装成功"
+        echo "🗄️  配置数据库..."
+        python scripts/setup_env.py --auto-sqlite
+        echo "✅ 数据库配置成功"
+        echo "🔄 初始化数据库..."
+        python scripts/init_mysql_db.py
+        echo "✅ 数据库初始化成功"
+        cd ../frontend
+        if [ ! -d "node_modules" ]; then
+            npm install
+            echo "✅ 前端依赖安装成功"
+        fi
+        echo "⚙️  配置前端环境..."
+        echo "VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1" > .env
+        echo "✅ 前端环境配置成功"
+        cd ..
+        echo ""
+        echo "🎉 部署完成！"
+        echo "==============="
+        echo ""
+        echo "💡 启动方法："
+        echo ""
+        echo "1️⃣  启动后端服务（在第一个终端窗口）："
+        echo "   conda activate voice_diagnosis_env"
+        echo "   cd $(pwd)/backend"
+        echo "   python main.py"
+        echo ""
+        echo "2️⃣  启动前端服务（在第二个终端窗口）："
+        echo "   cd $(pwd)/frontend"
+        echo "   npm run dev"
+        echo ""
+        echo "3️⃣  访问系统："
+        echo "   前端地址: http://localhost:5173"
+        echo "   后端API: http://127.0.0.1:8000/docs"
+        echo ""
+        echo "📚 详细文档: $(pwd)/DEPLOYMENT_GUIDE.md"
+        echo ""
+        echo "🆘 如遇问题，请查看部署指南或提交GitHub Issue"
+        echo ""
+        exit 0
     fi
 fi
 
 if ! conda env list | grep -q "voice_diagnosis_env"; then
-    conda create -n voice_diagnosis_env python=3.10 -y
-    echo "✅ Python环境创建成功"
+    echo "🔧 选择环境创建方式："
+    echo "1) 使用environment.yml（推荐，包含优化的依赖配置）"
+    echo "2) 手动创建环境"
+    read -p "请选择 [1/2]: " env_choice
+    
+    if [[ "$env_choice" == "1" ]]; then
+        echo "📦 使用environment.yml创建环境..."
+        conda env create -f environment.yml
+        echo "✅ Python环境创建成功（使用environment.yml）"
+    else
+        echo "📦 手动创建Python环境..."
+        conda create -n voice_diagnosis_env python=3.10 -y
+        echo "✅ Python环境创建成功（手动创建）"
+    fi
 fi
 
 # 激活环境
