@@ -11,6 +11,10 @@ from mysql.connector import Error
 from dotenv import load_dotenv
 import subprocess
 
+# 添加父目录到Python路径，以便能够导入app模块
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parent_dir)
+
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,

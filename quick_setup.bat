@@ -38,14 +38,16 @@ if %errorlevel% equ 0 (
     echo ⚠️  环境voice_diagnosis_env已存在，是否删除重建？[y/N]
     set /p response=
     if /i "%response%"=="y" (
+        echo 🔄 正在删除旧环境...
         conda env remove -n voice_diagnosis_env -y
+        echo 📦 创建新Python环境...
+        conda create -n voice_diagnosis_env python=3.10 -y
+        echo ✅ Python环境创建成功
     ) else (
         echo 📝 使用现有环境
     )
-)
-
-conda env list | findstr "voice_diagnosis_env" >nul
-if %errorlevel% neq 0 (
+) else (
+    echo 📦 创建新Python环境...
     conda create -n voice_diagnosis_env python=3.10 -y
     echo ✅ Python环境创建成功
 )
@@ -71,7 +73,7 @@ echo ✅ 后端依赖安装成功
 
 REM 设置数据库
 echo 🗄️  配置数据库...
-python scripts/setup_env.py --auto-sqlite
+python scripts/setup_env.py --auto-mysql
 echo ✅ 数据库配置成功
 
 REM 初始化数据库
@@ -123,7 +125,7 @@ echo 3️⃣  访问系统：
 echo    前端地址: http://localhost:5173
 echo    后端API: http://127.0.0.1:8000/docs
 echo.
-echo 📚 详细文档: %cd%\DEPLOYMENT_GUIDE.md
+echo 📚 详细文档: %cd%\docs
 echo.
 echo 🆘 如遇问题，请查看部署指南或提交GitHub Issue
 echo.

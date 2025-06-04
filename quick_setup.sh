@@ -43,7 +43,14 @@ if conda env list | grep -q "voice_diagnosis_env"; then
     echo "⚠️  环境voice_diagnosis_env已存在，是否删除重建？(y/N)"
     read -r response
     if [[ "$response" =~ ^[Yy]$ ]]; then
+        echo "🔄 正在删除旧环境..."
+        # 添加环境停用逻辑，避免删除当前激活的环境
+        source $(conda info --base)/etc/profile.d/conda.sh
+        conda deactivate
         conda env remove -n voice_diagnosis_env -y
+        echo "📦 创建新Python环境..."
+        conda create -n voice_diagnosis_env python=3.10 -y
+        echo "✅ Python环境创建成功"
     else
         echo "📝 使用现有环境"
         source $(conda info --base)/etc/profile.d/conda.sh
@@ -56,7 +63,7 @@ if conda env list | grep -q "voice_diagnosis_env"; then
         pip install exceptiongroup tomli
         echo "✅ 后端依赖安装成功"
         echo "🗄️  配置数据库..."
-        python scripts/setup_env.py --auto-sqlite
+        python scripts/setup_env.py --auto-mysql
         echo "✅ 数据库配置成功"
         echo "🔄 初始化数据库..."
         python scripts/init_mysql_db.py
@@ -97,23 +104,10 @@ if conda env list | grep -q "voice_diagnosis_env"; then
         echo ""
         exit 0
     fi
-fi
-
-if ! conda env list | grep -q "voice_diagnosis_env"; then
-    echo "🔧 选择环境创建方式："
-    echo "1) 使用environment.yml（推荐，包含优化的依赖配置）"
-    echo "2) 手动创建环境"
-    read -p "请选择 [1/2]: " env_choice
-    
-    if [[ "$env_choice" == "1" ]]; then
-        echo "📦 使用environment.yml创建环境..."
-        conda env create -f environment.yml
-        echo "✅ Python环境创建成功（使用environment.yml）"
-    else
-        echo "📦 手动创建Python环境..."
-        conda create -n voice_diagnosis_env python=3.10 -y
-        echo "✅ Python环境创建成功（手动创建）"
-    fi
+else
+    echo "📦 创建新Python环境..."
+    conda create -n voice_diagnosis_env python=3.10 -y
+    echo "✅ Python环境创建成功"
 fi
 
 # 激活环境
@@ -133,7 +127,7 @@ echo "✅ 后端依赖安装成功"
 
 # 设置数据库
 echo "🗄️  配置数据库..."
-python scripts/setup_env.py --auto-sqlite
+python scripts/setup_env.py --auto-mysql
 echo "✅ 数据库配置成功"
 
 # 初始化数据库
@@ -156,8 +150,6 @@ fi
 
 npm install
 echo "✅ 前端依赖安装成功"
-
-# 创建前端环境配置
 
 # 返回项目根目录
 cd ..

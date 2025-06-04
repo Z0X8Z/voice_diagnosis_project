@@ -15,8 +15,8 @@ class Settings(BaseSettings):
 
     # OpenAI配置 - 从环境变量读取
     OPENAI_API_KEY: str = ""  # 必须通过环境变量设置
-    OPENAI_MODEL: str = "Pro/deepseek-ai/DeepSeek-V3"
-    OPENAI_API_BASE: str = "https://api.siliconflow.cn/v1"
+    OPENAI_MODEL: str = ""
+    OPENAI_API_BASE: str = ""
 
     @validator("BACKEND_CORS_ORIGINS", pre=True)
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> Union[List[str], str]:
