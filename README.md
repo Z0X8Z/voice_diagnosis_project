@@ -166,12 +166,52 @@ python main.py
 # 不要使用Python解释器的完整路径
 ```
 
+#### ❌ 依赖安装失败/构建报错
+
+**常见报错：** PyYAML、exceptiongroup、tomli等包安装失败
+
+**解决方案：**
+
+某些环境下，个别依赖（如 PyYAML）可能因兼容性或构建问题导致安装失败。此时可采用如下手动安装方案：
+
+```bash
+# 方案1：指定版本安装
+pip install pyyaml==6.0.1
+pip install -r backend/requirements.txt --no-deps
+pip install exceptiongroup tomli
+
+# 方案2：逐个安装关键依赖
+pip install fastapi==0.68.2
+pip install sqlalchemy==1.4.54
+pip install uvicorn==0.15.0
+pip install python-dotenv==1.1.0
+```
+
+**说明：**
+- `--no-deps` 跳过依赖检查，避免冲突
+- 这样可规避部分依赖冲突或构建失败问题
+- 如遇 `ModuleNotFoundError`，请根据报错信息手动 `pip install` 缺失的包
+
 #### ❌ MySQL连接失败
 
 **解决方案：**
 1. 确保MySQL服务运行：`sudo service mysql start`
 2. 或使用SQLite（默认）：无需额外配置
 3. 初始化数据库：`python scripts/init_mysql_db.py`
+
+#### ❌ 端口冲突
+
+**症状：** 8000端口被占用，启动失败
+
+**解决方案：**
+```bash
+# 查看端口占用
+lsof -i :8000
+
+# 释放端口或更改端口
+uvicorn main:app --port 8001  # 更改后端端口
+# 或在main.py中修改端口号
+```
 
 ### 前端问题
 
@@ -192,6 +232,19 @@ python main.py
 
 **解决方案：**
 后端已配置CORS，如仍有问题，检查API地址是否正确
+
+#### ❌ 前端端口冲突
+
+**症状：** 3000或5173端口被占用
+
+**解决方案：**
+```bash
+# 查看端口占用
+lsof -i :5173
+
+# 更改前端端口
+npm run dev -- --port 3001
+```
 
 ### 环境问题
 
