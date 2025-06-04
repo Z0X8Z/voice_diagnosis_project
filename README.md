@@ -2,6 +2,30 @@
 
 声肺康智能分析系统是一个基于声音分析的肺部健康评估系统，通过分析用户的声音特征来评估肺部健康状况。
 
+## ⚡ 新用户快速部署
+
+**🚀 一键部署脚本（推荐）：**
+
+```bash
+# macOS/Linux用户
+git clone https://github.com/Z0X8Z/voice_diagnosis_project.git
+cd voice_diagnosis_project
+./quick_setup.sh
+
+# Windows用户
+git clone https://github.com/Z0X8Z/voice_diagnosis_project.git
+cd voice_diagnosis_project
+quick_setup.bat
+```
+
+**📚 详细部署指南：** [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)
+
+**⚠️ 前提条件：**
+- 已安装 [Anaconda/Miniconda](https://www.anaconda.com/products/distribution)
+- 已安装 [Node.js](https://nodejs.org/) (LTS版本)
+
+---
+
 ## 功能特点
 
 - 声音特征分析
