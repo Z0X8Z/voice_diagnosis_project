@@ -424,7 +424,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Position, QuestionFilled, Refresh } from '@element-plus/icons-vue'
 import { useUserStore } from '../stores/user'
 import { useApi } from '../composables/useApi'
-import { useDashboardMode } from '../composables/useDashboardMode'
+import { useDashboardMode } from '../composables/useDashboardMode.js'
 import LineChart from '../components/LineChart.vue'
 import { useWebSocket } from '../composables/useWebSocket'
 
