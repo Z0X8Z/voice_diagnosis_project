@@ -57,7 +57,11 @@ call conda activate voice_diagnosis_env
 REM 安装后端依赖
 echo 📦 安装后端依赖...
 cd backend
-pip install -r requirements.txt
+REM 使用更可靠的安装方法，避免依赖安装失败问题
+echo 🔧 使用优化的依赖安装方案...
+pip install pyyaml==6.0.1
+pip install -r requirements.txt --no-deps
+pip install exceptiongroup tomli
 if %errorlevel% neq 0 (
     echo ❌ 后端依赖安装失败
     pause
@@ -96,11 +100,6 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 echo ✅ 前端依赖安装成功
-
-REM 创建前端环境配置
-echo ⚙️  配置前端环境...
-echo VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1 > .env
-echo ✅ 前端环境配置成功
 
 REM 返回项目根目录
 cd ..

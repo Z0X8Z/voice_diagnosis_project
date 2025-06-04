@@ -10,6 +10,7 @@
 # macOS/Linux用户
 git clone https://github.com/Z0X8Z/voice_diagnosis_project.git
 cd voice_diagnosis_project
+chmod +x quick_setup.sh  # 确保脚本有执行权限
 ./quick_setup.sh
 
 # Windows用户
@@ -18,11 +19,33 @@ cd voice_diagnosis_project
 quick_setup.bat
 ```
 
-**📚 详细部署指南：** [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)
-
 **⚠️ 前提条件：**
 - 已安装 [Anaconda/Miniconda](https://www.anaconda.com/products/distribution)
-- 已安装 [Node.js](https://nodejs.org/) (LTS版本)
+- 已安装 [Node.js](https://nodejs.org/) (LTS版本，推荐16+)
+- Git (用于克隆项目)
+
+### 🔄 克隆项目常见问题
+
+#### 克隆速度慢或连接超时
+如果从GitHub克隆速度较慢，可以尝试以下方法：
+
+```bash
+# 方法1：使用国内镜像（如Gitee）
+git clone https://gitee.com/mirrors/voice_diagnosis_project.git
+
+# 方法2：设置Git代理（如果有代理服务器）
+git config --global http.proxy http://127.0.0.1:7890
+git clone https://github.com/Z0X8Z/voice_diagnosis_project.git
+# 完成后可以取消代理
+git config --global --unset http.proxy
+```
+
+#### 权限问题
+在Linux/macOS系统中，如果脚本无法执行，请确保设置了执行权限：
+
+```bash
+chmod +x quick_setup.sh
+```
 
 ---
 
@@ -53,10 +76,23 @@ quick_setup.bat
 
 ## 🚀 快速开始
 
-### 前提条件
-- [Anaconda](https://www.anaconda.com/products/distribution) 或 [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
+### 系统要求
+- **操作系统**：Windows 10+、macOS 10.15+、Ubuntu 18.04+
+- **内存**：至少4GB RAM，推荐8GB+
+- **存储**：至少2GB可用空间
+- **处理器**：现代多核处理器（推荐Intel i5/AMD Ryzen 5或更高）
+
+### 软件前提条件
+- [Anaconda](https://www.anaconda.com/products/distribution) 或 [Miniconda](https://docs.conda.io/en/latest/miniconda.html) (Python环境管理)
 - [Node.js](https://nodejs.org/) (推荐 16+ 版本)
-- [MySQL](https://dev.mysql.com/downloads/) (可选，系统可使用内置SQLite)
+- [MySQL](https://dev.mysql.com/downloads/) (可选，系统默认使用SQLite)
+- [Git](https://git-scm.com/downloads) (用于克隆项目)
+
+### 版本兼容性说明
+- Python: 3.8-3.10 (推荐3.10)
+- Node.js: 14-18 (推荐16 LTS)
+- npm: 6+ (通常随Node.js安装)
+- MySQL: 5.7+ 或 8.0+ (如果选择使用MySQL)
 
 ## 📦 安装步骤
 
@@ -82,7 +118,11 @@ conda env list
 
 #### 2.3 安装后端依赖
 ```bash
-pip install -r backend/requirements.txt
+cd backend
+# 使用更可靠的安装方法，避免依赖安装失败问题
+pip install pyyaml==6.0.1
+pip install -r requirements.txt --no-deps
+pip install exceptiongroup tomli
 ```
 
 ### 3. 前端环境配置
@@ -93,19 +133,34 @@ cd frontend
 npm install
 ```
 
-#### 3.2 配置API地址
-创建前端环境配置文件：
+### 4. 数据库配置（可选）
+
 ```bash
-# 在frontend目录下创建.env文件
-echo "VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1" > .env
+cd ../backend  # 如果已经在backend目录，则不需要cd ../backend
+# 自动配置SQLite数据库（推荐新手）
+python scripts/setup_env.py --auto-sqlite
+
+# 或按提示手动配置
+python scripts/setup_env.py
 ```
 
-### 4. 数据库配置（可选）
+#### 4.1 数据库选择说明
+本项目支持两种数据库配置：
+- **SQLite**（默认）：无需额外安装，适合开发和测试
+- **MySQL**：需要额外安装MySQL服务器，适合生产环境
+
+#### 4.2 初始化数据库
 ```bash
-cd ../backend
-python scripts/setup_env.py
-# 按提示配置，或直接使用默认SQLite数据库
+# 初始化数据库结构和基础数据
+python scripts/init_mysql_db.py
 ```
+
+#### 4.3 数据库配置文件
+配置会生成在`backend/.env`文件中，包含以下主要内容：
+- 项目基本配置
+- 安全配置（密钥等）
+- 数据库连接信息
+- CORS配置
 
 ## 🏃‍♂️ 运行系统
 
@@ -162,6 +217,11 @@ npm run build  # 测试构建是否成功
 # 后端启动后测试
 curl http://127.0.0.1:8000/
 # 应该返回：{"message":"欢迎使用声肺康系统"}
+```
+
+### 验证数据库连接
+```bash
+curl http://127.0.0.1:8000/db-status
 ```
 
 ## 🐛 常见问题与解决方案
@@ -245,12 +305,7 @@ uvicorn main:app --port 8001  # 更改后端端口
 
 **解决方案：**
 1. 确认后端服务运行：`lsof -i :8000` 或访问 http://127.0.0.1:8000
-2. 检查前端.env文件：
-   ```bash
-   # frontend/.env
-   VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1
-   ```
-3. 重启前端服务：`npm run dev`
+2. 重启前端服务：`npm run dev`
 
 #### ❌ 跨域问题 (CORS)
 
@@ -269,6 +324,42 @@ lsof -i :5173
 # 更改前端端口
 npm run dev -- --port 3001
 ```
+
+#### ❌ IDE显示"无法解析导入"错误
+
+**症状：** IDE显示类似"无法解析导入'fastapi'"等错误，但代码可以正常运行
+
+**原因：** IDE未正确识别Python解释器环境
+
+**解决方案：**
+
+1. **VS Code配置：**
+   - 按 `Cmd + Shift + P`（Mac）或 `Ctrl + Shift + P`（Windows）
+   - 输入 "Python: Select Interpreter"
+   - 选择 `voice_diagnosis_env` 环境中的Python解释器
+   - 路径通常为：`/opt/anaconda3/envs/voice_diagnosis_env/bin/python`
+
+2. **PyCharm配置：**
+   - 打开 `Preferences/Settings` -> `Project` -> `Python Interpreter`
+   - 点击齿轮图标 -> `Add`
+   - 选择 `Conda Environment` -> `Existing Environment`
+   - 选择 `voice_diagnosis_env` 环境中的Python解释器
+
+3. **验证配置：**
+   ```bash
+   # 确认环境激活
+   conda activate voice_diagnosis_env
+   
+   # 验证fastapi安装
+   pip list | grep fastapi
+   ```
+
+4. **如果问题仍然存在：**
+   - 重启IDE
+   - 重新安装fastapi：`pip uninstall fastapi -y && pip install fastapi==0.68.2`
+   - 清除IDE缓存并重新加载窗口
+
+**注意：** 此错误仅影响IDE的代码提示和错误检查，不影响实际代码运行。
 
 ### 环境问题
 
@@ -319,6 +410,37 @@ tail -f backend/logs/app.log
 
 ## 🔍 故障排除流程
 
+### 故障排除流程图
+
+```
+┌─────────────────┐
+│ 项目启动失败    │
+└────────┬────────┘
+         ▼
+┌─────────────────┐     ┌─────────────────┐
+│ 后端启动失败    │─────▶ 1. 检查环境激活 │
+└────────┬────────┘     │ 2. 检查依赖安装 │
+         │              │ 3. 检查工作目录 │
+         │              │ 4. 检查端口占用 │
+         │              └─────────────────┘
+         ▼
+┌─────────────────┐     ┌─────────────────┐
+│ 前端启动失败    │─────▶ 1. 检查npm安装  │
+└────────┬────────┘     │ 2. 检查依赖安装 │
+         │              │ 3. 检查端口占用 │
+         │              └─────────────────┘
+         ▼
+┌─────────────────┐     ┌─────────────────┐
+│ 运行时错误      │─────▶ 1. 查看日志     │
+└────────┬────────┘     │ 2. 检查API连接  │
+         │              │ 3. 检查数据库   │
+         │              └─────────────────┘
+         ▼
+┌─────────────────┐
+│ 提交GitHub Issue│
+└─────────────────┘
+```
+
 ### 1. 环境检查
 ```bash
 # 检查Python环境
@@ -351,6 +473,33 @@ curl -v http://127.0.0.1:8000/api/v1/auth/status
 curl http://127.0.0.1:8000/db-status
 ```
 
+### 4. 完整故障排除清单
+
+如果遇到问题，请按照以下步骤进行排查：
+
+1. **确认环境激活**
+   - 确认conda环境已正确激活 (`conda activate voice_diagnosis_env`)
+   - 检查Python版本是否为3.8-3.10 (`python --version`)
+
+2. **检查依赖安装**
+   - 后端依赖是否正确安装 (`pip list`)
+   - 前端依赖是否正确安装 (`npm list --depth=0`)
+
+3. **检查配置文件**
+   - 后端配置文件(.env)是否存在且正确
+   - 数据库连接是否正确配置
+
+4. **检查网络和端口**
+   - 确认所需端口未被占用 (8000, 5173)
+   - 确认网络连接正常
+
+5. **检查日志**
+   - 查看后端日志 (`tail -f backend/logs/app.log`)
+   - 查看浏览器控制台错误
+
+6. **尝试重新安装**
+   - 如持续失败，尝试使用一键部署脚本重新安装
+
 ## 项目结构
 
 ```
@@ -358,27 +507,77 @@ curl http://127.0.0.1:8000/db-status
 ├── backend/                # 后端代码
 │   ├── app/               # 应用代码
 │   │   ├── api/          # API路由
+│   │   │   └── v1/       # API v1版本
+│   │   │       ├── endpoints/  # 各功能端点
+│   │   │       └── deps.py     # 依赖项（认证等）
 │   │   ├── core/         # 核心配置
+│   │   │   ├── config.py       # 配置加载
+│   │   │   └── security.py     # 安全相关
 │   │   ├── db/           # 数据库
-│   │   ├── models/       # 数据模型
-│   │   ├── schemas/      # 数据模式
+│   │   │   ├── base.py         # 基础模型
+│   │   │   └── session.py      # 数据库会话
+│   │   ├── models/       # 数据模型（ORM）
+│   │   │   ├── user.py         # 用户模型
+│   │   │   └── voice_record.py # 声音记录模型
+│   │   ├── schemas/      # 数据模式（Pydantic）
+│   │   │   ├── user.py         # 用户模式
+│   │   │   └── voice.py        # 声音数据模式
 │   │   └── services/     # 业务服务
+│   │       ├── auth.py         # 认证服务
+│   │       └── voice_analysis.py # 声音分析服务
 │   ├── scripts/          # 脚本文件
+│   │   ├── setup_env.py        # 环境配置脚本
+│   │   └── init_mysql_db.py    # 数据库初始化
 │   ├── logs/             # 日志文件
-│   ├── uploads/          # 上传文件
+│   ├── main.py           # 应用入口
+│   ├── requirements.txt  # 依赖列表
+│   ├── .env              # 环境变量（自动生成）
 │   └── tests/            # 测试文件
 ├── frontend/              # 前端代码
 │   ├── src/              # 源代码
 │   │   ├── components/   # 组件
+│   │   │   ├── common/         # 通用组件
+│   │   │   └── voice/          # 声音相关组件
 │   │   ├── pages/        # 页面
+│   │   │   ├── dashboard/      # 仪表盘页面
+│   │   │   └── analysis/       # 分析页面
 │   │   ├── services/     # 服务
+│   │   │   ├── api.js          # API调用
+│   │   │   └── auth.js         # 认证服务
 │   │   ├── composables/  # 组合式API
 │   │   └── utils/        # 工具
 │   ├── public/           # 静态资源
-│   └── .env             # 环境配置
+│   ├── package.json      # 依赖配置
+│   └── vite.config.js    # Vite配置
 ├── ml_models/             # 机器学习模型
-└── docs/                 # 文档
+│   ├── voice_classifier/  # 声音分类模型
+│   └── feature_extractor/ # 特征提取模型
+├── docs/                  # 文档
+│   └── API.md             # API文档
+├── quick_setup.sh         # Linux/macOS快速部署脚本
+├── quick_setup.bat        # Windows快速部署脚本
+├── environment.yml        # Conda环境配置
+└── README.md              # 项目说明
 ```
+
+### 关键文件说明
+
+#### 后端核心文件
+- `backend/main.py` - 应用入口点，包含FastAPI实例创建和路由注册
+- `backend/app/core/config.py` - 配置加载，从.env文件读取环境变量
+- `backend/app/db/session.py` - 数据库会话管理
+- `backend/app/api/v1/endpoints/` - API端点实现
+
+#### 前端核心文件
+- `frontend/src/main.js` - 应用入口点
+- `frontend/src/router/index.js` - 路由配置
+- `frontend/src/store/index.js` - 状态管理
+- `frontend/src/services/api.js` - 后端API调用
+
+#### 配置文件
+- `backend/.env` - 后端环境变量（运行setup_env.py生成）
+- `environment.yml` - Conda环境配置
+- `frontend/vite.config.js` - 前端构建配置
 
 ## 开发指南
 
@@ -483,11 +682,11 @@ docker run -d -p 80:80 voice-analysis-frontend
 
 | 姓名   | 角色/分工                     | 主要工作内容                         |
 |--------|------------------------------|--------------------------------------|
-| 牛志宇 | 项目负责人、文档撰写         | 选定题目、系统可行性与需求分析、文档撰写 |
-| 张绪正 | 架构设计、数据库设计         | 系统概要设计、数据库设计、详细设计   |
-| 张胜希 | 核心开发                     | 编程实现主要模块和功能               |
-| 惠国轩 | 测试与调试                   | 系统调试与测试                       |
-| 刘储瑜 | 项目优化、结题、文档完善     | 项目改进提升、结题准备、文档撰写     |
+| LoOp | 项目负责人、文档撰写         | 选定题目、系统可行性与需求分析、文档撰写 |
+| 丁一 | 架构设计、数据库设计         | 系统概要设计、数据库设计、后端架构  |
+| 塑料 | 核心开发                     | 编程模型训练、详细设计             |
+| 风信然 | 测试与调试                   | 系统调试与测试                       |
+| 荣筝 | 项目优化、结题、文档完善     | 项目改进提升、结题准备、文档撰写     |
 
 ---
 
@@ -496,4 +695,3 @@ docker run -d -p 80:80 voice-analysis-frontend
 🎯 **项目状态**: 积极维护中
 
 📈 **版本**: v1.0.0
-

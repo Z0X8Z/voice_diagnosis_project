@@ -49,7 +49,11 @@ if conda env list | grep -q "voice_diagnosis_env"; then
         source $(conda info --base)/etc/profile.d/conda.sh
         conda activate voice_diagnosis_env
         cd backend
-        pip install -r requirements.txt
+        # 使用更可靠的安装方法，避免依赖安装失败问题
+        echo "🔧 使用优化的依赖安装方案..."
+        pip install pyyaml==6.0.1
+        pip install -r requirements.txt --no-deps
+        pip install exceptiongroup tomli
         echo "✅ 后端依赖安装成功"
         echo "🗄️  配置数据库..."
         python scripts/setup_env.py --auto-sqlite
@@ -58,13 +62,15 @@ if conda env list | grep -q "voice_diagnosis_env"; then
         python scripts/init_mysql_db.py
         echo "✅ 数据库初始化成功"
         cd ../frontend
-        if [ ! -d "node_modules" ]; then
-            npm install
-            echo "✅ 前端依赖安装成功"
+        if [ -d "node_modules" ]; then
+            echo "⚠️  发现现有node_modules，是否清理重装？(y/N)"
+            read -r response
+            if [[ "$response" =~ ^[Yy]$ ]]; then
+                rm -rf node_modules package-lock.json
+            fi
         fi
-        echo "⚙️  配置前端环境..."
-        echo "VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1" > .env
-        echo "✅ 前端环境配置成功"
+        npm install
+        echo "✅ 前端依赖安装成功"
         cd ..
         echo ""
         echo "🎉 部署完成！"
@@ -118,7 +124,11 @@ conda activate voice_diagnosis_env
 # 安装后端依赖
 echo "📦 安装后端依赖..."
 cd backend
-pip install -r requirements.txt
+# 使用更可靠的安装方法，避免依赖安装失败问题
+echo "🔧 使用优化的依赖安装方案..."
+pip install pyyaml==6.0.1
+pip install -r requirements.txt --no-deps
+pip install exceptiongroup tomli
 echo "✅ 后端依赖安装成功"
 
 # 设置数据库
@@ -148,9 +158,6 @@ npm install
 echo "✅ 前端依赖安装成功"
 
 # 创建前端环境配置
-echo "⚙️  配置前端环境..."
-echo "VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1" > .env
-echo "✅ 前端环境配置成功"
 
 # 返回项目根目录
 cd ..
