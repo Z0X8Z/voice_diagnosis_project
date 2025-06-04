@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional, Union
 from pydantic import AnyHttpUrl, BaseSettings, validator
+import os
 
 class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
@@ -12,8 +13,8 @@ class Settings(BaseSettings):
     # CORS配置
     BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = []
 
-    # OpenAI配置
-    OPENAI_API_KEY: str = "sk-mkmgtzssdtykqpaigcotikbjpqbylqrpokblhswjyjnpbfbz"
+    # OpenAI配置 - 从环境变量读取
+    OPENAI_API_KEY: str = ""  # 必须通过环境变量设置
     OPENAI_MODEL: str = "Pro/deepseek-ai/DeepSeek-V3"
     OPENAI_API_BASE: str = "https://api.siliconflow.cn/v1"
 
@@ -25,11 +26,11 @@ class Settings(BaseSettings):
             return v
         raise ValueError(v)
 
-    # 数据库配置
+    # 数据库配置 - 从环境变量读取
     MYSQL_HOST: str = "localhost"
     MYSQL_PORT: str = "3306"
     MYSQL_USER: str = "root"
-    MYSQL_PASSWORD: str = "12345678"
+    MYSQL_PASSWORD: str = ""  # 必须通过环境变量设置
     MYSQL_DATABASE: str = "project"
     SQLALCHEMY_DATABASE_URI: Optional[str] = None
 
@@ -41,6 +42,7 @@ class Settings(BaseSettings):
 
     class Config:
         case_sensitive = True
-        env_file = ".env"
+        # 使用绝对路径确保能找到.env文件
+        env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
 
 settings = Settings()
