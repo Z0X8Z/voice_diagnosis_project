@@ -420,7 +420,7 @@ class LLMService:
 请分析以下语音指标数据，并结合用户过往的诊断建议，给出本次健康分析：\n
 当前语音指标：
 - 预测结果: {voice_metrics.model_prediction}
-- 置信度: {voice_metrics.model_confidence}
+- 音频质量得分（满分为100%）: {voice_metrics.model_confidence}
 - MFCC: {[getattr(voice_metrics, f'mfcc_{i}') for i in range(1, 14)]}
 - Chroma: {[getattr(voice_metrics, f'chroma_{i}') for i in range(1, 13)]}
 - RMS: {voice_metrics.rms}
@@ -489,7 +489,7 @@ class LLMService:
 - 过零率: {metrics.get('zero_crossing_rate', '未提供')}
 - 频谱质心: {metrics.get('spectral_centroid', '未提供')} Hz
 - 模型预测: {metrics.get('prediction', '未提供')}
-- 置信度: {metrics.get('confidence', '未提供')}
+- 音频质量得分（满分为100%）: {metrics.get('confidence', '未提供')}
 
 请提供以下格式的JSON响应:
 {{

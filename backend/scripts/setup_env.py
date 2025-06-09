@@ -45,9 +45,9 @@ def create_env_file(auto_mysql=False):
             mysql_password = "12345678"
             mysql_database = "project"
             # OpenAI配置
-            openai_api_key = ""
-            openai_model = ""
-            openai_api_base = ""
+            openai_api_key = "sk-mkmgtzssdtykqpaigcotikbjpqbylqrpokblhswjyjnpbfbz"
+            openai_model = "Pro/deepseek-ai/DeepSeek-V3"
+            openai_api_base = "https://api.siliconflow.cn/v1"
             # CORS配置
             cors_origins = "http://localhost:5173,http://127.0.0.1:5173"
         else:

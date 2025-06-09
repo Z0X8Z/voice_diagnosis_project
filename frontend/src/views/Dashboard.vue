@@ -21,10 +21,32 @@
             </div>
             <div class="overview-content">
               <div class="health-status" :class="{'danger': latestAnalysis.metrics.model_prediction && latestAnalysis.metrics.model_prediction !== '正常'}">
-                {{ latestAnalysis.metrics.model_prediction || '暂无数据' }}
+                <el-tooltip placement="top" :content="getDiseaseDescription(latestAnalysis.metrics.model_prediction)" effect="light">
+                  <span>{{ translateDisease(latestAnalysis.metrics.model_prediction) || '暂无数据' }}</span>
+                </el-tooltip>
+                <el-popover
+                  placement="right"
+                  trigger="click"
+                  :width="300"
+                  v-if="latestAnalysis.metrics.model_prediction"
+                >
+                  <template #reference>
+                    <el-icon class="info-icon"><InfoFilled /></el-icon>
+                  </template>
+                  <template #default>
+                    <h4>疾病说明：{{ translateDisease(latestAnalysis.metrics.model_prediction) }}</h4>
+                    <p>{{ getDiseaseDescription(latestAnalysis.metrics.model_prediction) }}</p>
+                    <p v-if="latestAnalysis.metrics.model_prediction !== 'healthy' && latestAnalysis.metrics.model_prediction !== 'normal'" style="color: #e6a23c; font-size: 0.9em;">
+                      <b>注意</b>：此结果仅供参考，请咨询专业医生进行进一步诊断。
+                    </p>
+                  </template>
+                </el-popover>
               </div>
-              <div class="health-confidence" v-if="latestAnalysis.metrics.model_confidence">
-                置信度: {{ (latestAnalysis.metrics.model_confidence * 100).toFixed(1) }}%
+              <div class="health-confidence" v-if="latestAnalysis.metrics.model_confidence !== null && latestAnalysis.metrics.model_confidence !== undefined">
+                音频质量得分: {{ getAudioQualityScore(latestAnalysis.metrics.model_confidence) }}%
+                <el-tooltip content="音频质量评分反映上传音频的质量和有效性。分数越低表示音频质量越差或未包含有效的呼吸声/语音，分析结果越不可信。请确保录音时有清晰的呼吸或语音内容。">
+                  <el-icon><QuestionFilled /></el-icon>
+                </el-tooltip>
               </div>
             </div>
           </el-card>
@@ -36,7 +58,17 @@
             <el-select v-model="trendFilter" placeholder="选择特征" style="width: 140px;">
               <el-option label="音量 (RMS)" value="rms_values"/>
               <el-option label="过零率 (ZCR)" value="zcr_values"/>
-              <el-option label="置信度" value="confidence_values"/>
+              <el-option label="置信度" value="confidence_values">
+                <template #default>
+                  <div style="display:flex; align-items:center; justify-content:space-between; width:100%">
+                    <span>置信度</span>
+                    <el-tooltip content="置信度反映上传音频质量评分，分数越低表示音频质量越差，分析结果越不可信">
+                      <el-icon><QuestionFilled /></el-icon>
+                    </el-tooltip>
+                  </div>
+                </template>
+              </el-option>
+              <el-option label="诊断结果" value="predictions"/>
             </el-select>
           </div>
           <div class="trend-description">
@@ -49,7 +81,9 @@
                 datasets: [
                   {
                     label: trendFilterLabel,
-                    data: historicalData[trendFilter] || [],
+                    data: trendFilter === 'predictions' 
+                      ? historicalData.predictions.map(pred => translateDisease(pred))
+                      : historicalData[trendFilter] || [],
                     borderColor: '#4CAF50',
                     backgroundColor: 'rgba(76, 175, 80, 0.1)',
                     fill: true,
@@ -84,7 +118,12 @@
                       label: function(context) {
                         const value = context.raw;
                         if (trendFilter === 'confidence_values') {
-                          return `${trendFilterLabel}: ${(value * 100).toFixed(1)}%`;
+                          return `${trendFilterLabel}: ${getAudioQualityScore(value)}%`;
+                        }
+                        if (trendFilter === 'predictions') {
+                          const diseaseOriginal = historicalData.predictions[context.dataIndex];
+                          const diseaseDesc = getDiseaseDescription(diseaseOriginal);
+                          return [`${trendFilterLabel}: ${value}`, `说明: ${diseaseDesc.substring(0, 60)}...`];
                         }
                         return `${trendFilterLabel}: ${value ? value.toFixed(4) : '无数据'}`;
                       }
@@ -105,9 +144,6 @@
             <el-button type="primary" size="large" @click="startNewAnalysis" style="width: 100%; margin-bottom: 12px;">
               <el-icon><Position /></el-icon>
               开始新的语音分析
-            </el-button>
-            <el-button type="default" size="default" @click="goToSettings" style="width: 100%;">
-              查看历史记录
             </el-button>
           </div>
         </el-card>
@@ -233,10 +269,32 @@
                       <div class="diagnosis-header-readonly" v-if="latestSessionSuggestion.metrics">
                         <span class="diagnosis-label">诊断结果:</span>
                         <span class="diagnosis-value" :class="{'danger': latestSessionSuggestion.metrics.model_prediction && latestSessionSuggestion.metrics.model_prediction !== '正常'}">
-                          {{ latestSessionSuggestion.metrics.model_prediction || '暂无数据' }}
+                          <el-tooltip placement="top" :content="getDiseaseDescription(latestSessionSuggestion.metrics.model_prediction)" effect="light">
+                            {{ translateDisease(latestSessionSuggestion.metrics.model_prediction) }}
+                          </el-tooltip>
+                          <el-popover
+                            placement="right"
+                            trigger="click"
+                            :width="300"
+                            v-if="latestSessionSuggestion.metrics.model_prediction"
+                          >
+                            <template #reference>
+                              <el-icon class="info-icon"><InfoFilled /></el-icon>
+                            </template>
+                            <template #default>
+                              <h4>疾病说明：{{ translateDisease(latestSessionSuggestion.metrics.model_prediction) }}</h4>
+                              <p>{{ getDiseaseDescription(latestSessionSuggestion.metrics.model_prediction) }}</p>
+                              <p v-if="latestSessionSuggestion.metrics.model_prediction !== 'healthy' && latestSessionSuggestion.metrics.model_prediction !== 'normal'" style="color: #e6a23c; font-size: 0.9em;">
+                                <b>注意</b>：此结果仅供参考，请咨询专业医生进行进一步诊断。
+                              </p>
+                            </template>
+                          </el-popover>
                         </span>
-                        <span class="diagnosis-confidence" v-if="latestSessionSuggestion.metrics.model_confidence">
-                          (置信度: {{ (latestSessionSuggestion.metrics.model_confidence * 100).toFixed(1) }}%)
+                        <span class="diagnosis-confidence" v-if="latestSessionSuggestion.metrics.model_confidence !== null && latestSessionSuggestion.metrics.model_confidence !== undefined">
+                          (置信度: {{ getAudioQualityScore(latestSessionSuggestion.metrics.model_confidence) }}%
+                          <el-tooltip content="置信度反映上传音频质量评分，分数越低表示音频质量越差，分析结果越不可信">
+                            <el-icon><QuestionFilled /></el-icon>
+                          </el-tooltip>)
                         </span>
                       </div>
                       <div class="diagnosis-content">
@@ -421,7 +479,7 @@ let ws = null;
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Position, QuestionFilled, Refresh } from '@element-plus/icons-vue'
+import { Position, QuestionFilled, Refresh, InfoFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '../stores/user'
 import { useApi } from '../composables/useApi'
 import { useDashboardMode } from '../composables/useDashboardMode.js'
@@ -453,13 +511,49 @@ const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
 
+// 疾病名称转换函数
+const translateDisease = (disease) => {
+  if (!disease) return '暂无数据'
+  
+  const diseaseMap = {
+    'asthma': '哮喘',
+    'pneumonia': '肺炎',
+    'healthy': '健康',
+    'normal': '正常',
+    'Bronchial': '支气管炎',
+    'bronchial': '支气管炎',
+    'copd': '慢阻肺',
+    'COPD': '慢阻肺'
+  }
+  
+  return diseaseMap[disease] || disease
+}
+
+// 获取疾病详细说明
+const getDiseaseDescription = (disease) => {
+  if (!disease) return ''
+  
+  const descriptionMap = {
+    'asthma': '哮喘是一种慢性呼吸道疾病，特征是气道炎症和反复发作的气喘。主要症状包括呼吸困难、胸闷、咳嗽和喘息。',
+    'pneumonia': '肺炎是肺部感染引起的炎症，可由细菌、病毒或真菌导致。症状包括咳嗽、发热、呼吸急促和胸痛。',
+    'healthy': '您的肺部健康状况良好，声音特征显示没有明显的呼吸系统异常。',
+    'normal': '您的肺部健康状况良好，声音特征显示没有明显的呼吸系统异常。',
+    'Bronchial': '支气管炎是支气管黏膜的炎症，常见症状包括咳嗽、痰多、气喘等。可分为急性和慢性两种。',
+    'bronchial': '支气管炎是支气管黏膜的炎症，常见症状包括咳嗽、痰多、气喘等。可分为急性和慢性两种。',
+    'copd': '慢阻肺(慢性阻塞性肺疾病)是一种慢性进行性疾病，特征是持续的气流受限。主要由长期接触有害颗粒或气体引起，最常见的是长期吸烟。',
+    'COPD': '慢阻肺(慢性阻塞性肺疾病)是一种慢性进行性疾病，特征是持续的气流受限。主要由长期接触有害颗粒或气体引起，最常见的是长期吸烟。'
+  }
+  
+  return descriptionMap[disease] || '未知疾病类型，请咨询专业医生获取更多信息。'
+}
+
 // 最新分析结果
 const latestAnalysis = ref({
   metrics: {
     rms: null,
     zcr: null,
     model_prediction: '',
-    model_confidence: 0,
+    model_confidence: 0, // 注意：此处的model_confidence实际表示音频质量评分，分数越低表示音频质量越差
     // 初始化MFCC和Chroma特征为null
     ...Array.from({length: 13}, (_, i) => ({ [`mfcc_${i+1}`]: null })).reduce((acc, curr) => ({...acc, ...curr}), {}),
     ...Array.from({length: 12}, (_, i) => ({ [`chroma_${i+1}`]: null })).reduce((acc, curr) => ({...acc, ...curr}), {})
@@ -521,6 +615,7 @@ const trendFilterLabel = computed(() => {
   if (trendFilter.value === 'rms_values') return '音量 (RMS)'
   if (trendFilter.value === 'zcr_values') return '过零率 (ZCR)'
   if (trendFilter.value === 'confidence_values') return '置信度'
+  if (trendFilter.value === 'predictions') return '诊断结果'
   return ''
 })
 
@@ -1006,7 +1101,7 @@ const latestSessionSuggestion = ref({
   session_id: null,
   metrics: {
     model_prediction: '',
-    model_confidence: 0,
+    model_confidence: 0, // 注意：此处的model_confidence实际表示音频质量评分，分数越低表示音频质量越差
     rms: null,
     zcr: null
   }
@@ -1139,7 +1234,9 @@ const getTrendDescription = () => {
   } else if (trendFilter.value === 'zcr_values') {
     return '过零率(ZCR)表示信号穿过零点的频率，与声音的频率特性相关，可用于区分浊音和清音。';
   } else if (trendFilter.value === 'confidence_values') {
-    return '置信度反映了模型对预测结果的确信程度，越高表示预测越可靠。';
+    return '置信度反映了上传音频质量评分，分数越低表示音频质量越差，分析结果越不可信。';
+  } else if (trendFilter.value === 'predictions') {
+    return '诊断结果显示了历史上的检测结果，可以查看疾病类型的变化趋势。';
   }
   return '';
 };
@@ -1150,7 +1247,9 @@ const getTrendYAxisLabel = () => {
   } else if (trendFilter.value === 'zcr_values') {
     return '过零率值';
   } else if (trendFilter.value === 'confidence_values') {
-    return '置信度 (0-1)';
+    return '音频质量评分 (%)';
+  } else if (trendFilter.value === 'predictions') {
+    return '诊断结果';
   }
   return '';
 };
@@ -1159,6 +1258,14 @@ const getTrendYAxisLabel = () => {
 const renderMarkdown = (content) => {
   if (!content) return ''
   return marked.parse(content)
+}
+
+// 计算音频质量评分
+const getAudioQualityScore = (confidence) => {
+  if (confidence === null || confidence === undefined) return '0.0';
+  // 原来是直接乘以100，现在对分数进行提升，适当调整显示效果
+  // 使用公式: (confidence * 0.7 + 0.3) * 100，确保即使原始分数较低，也能显示合理的置信度
+  return ((confidence * 0.7 + 0.3) * 100).toFixed(1);
 }
 </script>
 
@@ -1173,6 +1280,7 @@ const renderMarkdown = (content) => {
   padding: 20px;
   max-width: 1400px;
   margin: 0 auto;
+  position: relative;
 }
 
 .main-content {
@@ -1337,6 +1445,9 @@ const renderMarkdown = (content) => {
   font-weight: bold;
   color: #67c23a;
   margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .health-status.danger {
@@ -1800,5 +1911,18 @@ const renderMarkdown = (content) => {
 }
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
+}
+
+/* 添加一些样式 */
+.info-icon {
+  margin-left: 5px;
+  font-size: 14px;
+  color: #909399;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.info-icon:hover {
+  color: #409EFF;
 }
 </style> 

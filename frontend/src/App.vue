@@ -3,6 +3,7 @@ import { onMounted, computed } from 'vue'
 import { useUserStore } from './stores/user'
 import { useRoute } from 'vue-router'
 import NavBar from './components/NavBar.vue'
+import UserManual from './components/UserManual.vue'
 
 const userStore = useUserStore()
 const route = useRoute()
@@ -25,6 +26,8 @@ onMounted(async () => {
   <!-- 登录和注册页面不显示导航栏 -->
   <NavBar v-if="showNavBar" />
   <router-view></router-view>
+  <!-- 用户手册按钮，固定在右下角 -->
+  <UserManual />
 </template>
 
 <style>

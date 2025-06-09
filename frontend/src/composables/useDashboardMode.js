@@ -155,7 +155,7 @@ export function useDashboardMode() {
       // 数据展示
       canViewAcousticFeatures: isInteractive,
       canViewRealtimeKPI: isInteractive,
-      canViewHistoricalData: isInteractive,
+      canViewHistoricalData: true,
       
       // 只读功能
       canViewLatestSuggestion: true,  // 两种模式都可以查看

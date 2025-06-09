@@ -12,6 +12,7 @@ import tempfile
 import re
 import json
 import numpy as np
+import librosa
 
 from app.repositories.diagnosis_repository import DiagnosisRepository
 from app.core.llm import LLMClient, get_llm_client
@@ -473,10 +474,16 @@ class VoiceAnalysisService:
             model = create_model()
             # 使用模型进行预测
             prediction_label = model.get_pred(file_path)
-            # 由于模型不提供置信度，这里设置一个默认值
-            confidence = 0.95
             
-            logger.info(f"[_predict_health_status] 预测结果: {prediction_label}, 置信度: {confidence}")
+            # 不再使用固定置信度，而是基于音频质量评估
+            # 评估音频质量并生成置信度分数
+            audio_quality_score = await self._evaluate_audio_quality(file_path)
+            logger.info(f"[_predict_health_status] 音频质量评分: {audio_quality_score}")
+            
+            # 将音频质量评分作为置信度返回
+            confidence = audio_quality_score
+            
+            logger.info(f"[_predict_health_status] 预测结果: {prediction_label}, 置信度(基于音频质量): {confidence}")
             
             return {
                 "prediction": prediction_label,
@@ -488,6 +495,160 @@ class VoiceAnalysisService:
                 "prediction": "未知",
                 "confidence": 0.0
             }
+            
+    async def _evaluate_audio_quality(self, file_path: str) -> float:
+        """
+        评估音频质量，生成质量评分 (0-1范围)
+        
+        评分标准:
+        - 信噪比 (SNR)
+        - 音频能量和稳定性
+        - 语音频率特征
+        - 静音段比例
+        - 过零率规律性
+        - 语音活动检测 (VAD)
+        - 呼吸声特征验证
+        
+        质量越差，分数越低，表示分析结果越不可信
+        """
+        try:
+            # 加载音频文件
+            y, sr = librosa.load(file_path, sr=None)
+            
+            # 1. 计算信噪比 (估计值)
+            # 使用短时能量方差作为噪声水平评估
+            frame_length = int(sr * 0.025)  # 25ms 帧
+            hop_length = int(sr * 0.010)    # 10ms 跨步
+            
+            # 计算短时能量
+            energy = np.array([
+                sum(abs(y[i:i+frame_length]**2)) 
+                for i in range(0, len(y)-frame_length, hop_length)
+            ])
+            
+            # 使用能量方差评估噪声
+            energy_mean = np.mean(energy)
+            energy_std = np.std(energy)
+            energy_var = energy_std / energy_mean if energy_mean > 0 else 0
+            
+            # 将方差归一化为质量分数 (方差越大，质量越差)
+            energy_score = max(0, 1 - min(1, energy_var * 2))
+            
+            # 2. 评估音频长度是否足够
+            duration = len(y) / sr
+            duration_score = min(1.0, duration / 2.0)
+            
+            # 3. 静音段比例 (静音太多质量差)
+            silence_threshold = 0.01 * np.max(np.abs(y))
+            silence_ratio = np.sum(np.abs(y) < silence_threshold) / len(y)
+            silence_score = 1.0 - max(0, min(1.0, (silence_ratio - 0.2) / 0.6))
+            
+            # 如果静音比例过高，直接判定为低质量录音
+            if silence_ratio > 0.7:  # 超过70%是静音
+                logger.warning(f"[_evaluate_audio_quality] 检测到静音比例过高: {silence_ratio:.2f}")
+                return 0.3  # 返回较低的质量分数
+            
+            # 4. 过零率规律性 (语音应该有一定规律性)
+            zcr = librosa.feature.zero_crossing_rate(y)[0]
+            zcr_std = np.std(zcr)
+            zcr_score = min(1.0, zcr_std * 25)
+            
+            # 5. 频谱质心的变化 (自然语音有丰富的变化)
+            spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
+            spectral_score = min(1.0, np.std(spectral_centroid) / 400)
+            
+            # 6. **新增**: 语音活动检测 (VAD)
+            # 使用短时能量和过零率特征进行简单VAD
+            energy_frames = librosa.feature.rms(y=y, frame_length=frame_length, hop_length=hop_length)[0]
+            
+            # 设置能量阈值 (基于音频能量分布)
+            energy_threshold = 0.05 * np.max(energy_frames)
+            
+            # 计算声音活动帧的比例
+            active_frames = np.sum(energy_frames > energy_threshold) / len(energy_frames)
+            
+            # VAD得分: 至少要有一定比例的有声帧才能得到高分
+            vad_score = min(1.0, active_frames / 0.3)  # 要求至少30%的帧有声音活动
+            
+            # 如果几乎没有声音活动，大幅降低总评分
+            if active_frames < 0.1:  # 不足10%的帧有声音活动
+                logger.warning(f"[_evaluate_audio_quality] 几乎没有检测到声音活动: {active_frames:.2f}")
+                return 0.3  # 返回较低的质量分数
+            
+            # 7. **新增**: 呼吸声特征验证
+            # 计算呼吸声频率范围内的能量 (典型呼吸声频率为200-800Hz)
+            respiration_band = [200, 800]
+            
+            # 计算FFT
+            n_fft = 2048
+            D = np.abs(librosa.stft(y, n_fft=n_fft))
+            
+            # 获取频率范围
+            freqs = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
+            
+            # 提取呼吸声频率范围内的能量
+            resp_mask = (freqs >= respiration_band[0]) & (freqs <= respiration_band[1])
+            resp_energy = np.mean(D[resp_mask, :])
+            
+            # 计算总能量
+            total_energy = np.mean(D)
+            
+            # 呼吸特征比例 (呼吸声频率范围内的能量占比)
+            resp_ratio = resp_energy / total_energy if total_energy > 0 else 0
+            
+            # 呼吸声特征得分 (在呼吸声典型频率范围内应有一定能量)
+            respiration_score = min(1.0, resp_ratio * 10)
+            
+            # 如果呼吸频率范围的能量占比太低，可能不是呼吸声或语音
+            if resp_ratio < 0.05:  # 小于5%的能量在呼吸声频率范围
+                logger.warning(f"[_evaluate_audio_quality] 呼吸声特征比例过低: {resp_ratio:.4f}")
+                # 降低分数，但不要完全否决
+                respiration_score = respiration_score * 0.5
+            
+            # 综合得分 (调整权重，加入VAD和呼吸声特征)
+            weights = {
+                'energy': 0.15,      # 降低原始指标权重
+                'duration': 0.10,
+                'silence': 0.15,
+                'zcr': 0.10,
+                'spectral': 0.10,
+                'vad': 0.25,         # 语音活动检测权重较高
+                'respiration': 0.15  # 呼吸声特征检测
+            }
+            
+            quality_score = (
+                weights['energy'] * energy_score +
+                weights['duration'] * duration_score +
+                weights['silence'] * silence_score +
+                weights['zcr'] * zcr_score +
+                weights['spectral'] * spectral_score +
+                weights['vad'] * vad_score +
+                weights['respiration'] * respiration_score
+            )
+            
+            # 调整基础分数，考虑VAD和呼吸声特征的重要性
+            base_score = 0.3
+            quality_score = base_score + (1.0 - base_score) * quality_score
+            
+            # 应用更严格的最低标准
+            quality_score = max(0.2, min(0.95, quality_score))
+            
+            logger.info(f"[_evaluate_audio_quality] 音频质量分析: "
+                      f"能量={energy_score:.2f}, "
+                      f"长度={duration_score:.2f}, "
+                      f"静音={silence_score:.2f}, "
+                      f"过零={zcr_score:.2f}, "
+                      f"频谱={spectral_score:.2f}, "
+                      f"VAD={vad_score:.2f}, "
+                      f"呼吸={respiration_score:.2f}, "
+                      f"总分={quality_score:.2f}")
+                      
+            return quality_score
+            
+        except Exception as e:
+            logger.error(f"[_evaluate_audio_quality] 音频质量评估失败: {str(e)}", exc_info=True)
+            # 默认返回中等偏低分数
+            return 0.4
     
     def _build_analysis_prompt(self, voice_metrics: VoiceMetrics) -> str:
         """构建分析提示词"""
